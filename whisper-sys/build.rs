@@ -55,17 +55,30 @@ fn build_whisper_cpp(target_os: &str, target_arch: &str) {
 
     // Core source files
     build.file("../vendor/whisper.cpp/src/whisper.cpp")
+        // Core GGML files
         .file("../vendor/whisper.cpp/ggml/src/ggml.c")
+        .file("../vendor/whisper.cpp/ggml/src/ggml.cpp")
         .file("../vendor/whisper.cpp/ggml/src/ggml-alloc.c")
         .file("../vendor/whisper.cpp/ggml/src/ggml-backend.cpp")
         .file("../vendor/whisper.cpp/ggml/src/ggml-backend-reg.cpp")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-threading.cpp")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-quants.c")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-opt.cpp")
+        .file("../vendor/whisper.cpp/ggml/src/gguf.cpp")
+        // CPU backend core files
         .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/ggml-cpu.c")
         .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/ggml-cpu.cpp")
         .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/binary-ops.cpp")
         .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/unary-ops.cpp")
         .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/ops.cpp")
-        .file("../vendor/whisper.cpp/ggml/src/ggml-threading.cpp")
-        .file("../vendor/whisper.cpp/ggml/src/ggml-quants.c");
+        .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/quants.c")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/traits.cpp")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/vec.cpp")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/repack.cpp")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/hbm.cpp")
+        // AMX (Advanced Matrix Extensions) files
+        .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/amx/amx.cpp")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/amx/mmq.cpp");
 
     // Common compiler flags
     build.flag_if_supported("-fPIC");
@@ -125,6 +138,11 @@ fn build_whisper_cpp(target_os: &str, target_arch: &str) {
     // Architecture-specific optimizations
     match target_arch {
         "x86_64" => {
+            // Add x86-specific CPU backend files
+            build.file("../vendor/whisper.cpp/ggml/src/ggml-cpu/arch/x86/quants.c")
+                .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/arch/x86/repack.cpp")
+                .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/arch/x86/cpu-feats.cpp");
+
             // Enable AVX/AVX2 if available
             if !env::var("WHISPER_NO_AVX").is_ok() {
                 build.flag_if_supported("-mavx");
