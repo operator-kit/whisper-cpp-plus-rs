@@ -217,7 +217,7 @@ use whisper_cpp_rs::{WhisperContext, VadProcessor, VadParams};
 
 fn transcribe_with_vad(audio: &[f32]) -> Result<String, Box<dyn std::error::Error>> {
     let ctx = WhisperContext::new("models/ggml-base.en.bin")?;
-    let vad = VadProcessor::new()?;
+    let vad = VadProcessor::new("models/ggml-silero-v5.1.2.bin")?;
 
     // Detect speech segments
     let speech_segments = vad.process(audio);
@@ -334,8 +334,12 @@ Our test suite includes:
 - **Audio**: JFK sample included in `vendor/whisper.cpp/samples/`
 - **VAD Model** (optional): Download Silero VAD model for VAD tests
   ```bash
+  # Download the latest Silero VAD model (v5.1.2)
   curl -L -o tests/models/ggml-silero-vad.bin \
-    https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-silero-vad.bin
+    https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
+
+  # Alternative: Use the download script from whisper.cpp
+  ./vendor/whisper.cpp/models/download-vad-model.sh silero-v5.1.2 tests/models/
   ```
 
 ## Performance
