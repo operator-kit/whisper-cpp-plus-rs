@@ -33,13 +33,18 @@ fn build_whisper_cpp(target_os: &str, target_arch: &str) {
     // Add include directories
     build.include("../vendor/whisper.cpp")
         .include("../vendor/whisper.cpp/include")
-        .include("../vendor/whisper.cpp/ggml/include");
+        .include("../vendor/whisper.cpp/ggml/include")
+        .include("../vendor/whisper.cpp/ggml/src");
 
     // Core source files
     build.file("../vendor/whisper.cpp/src/whisper.cpp")
         .file("../vendor/whisper.cpp/ggml/src/ggml.c")
         .file("../vendor/whisper.cpp/ggml/src/ggml-alloc.c")
-        .file("../vendor/whisper.cpp/ggml/src/ggml-quants.c");
+        .file("../vendor/whisper.cpp/ggml/src/ggml-backend.cpp")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/ggml-cpu.c")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-threading.cpp")
+        .file("../vendor/whisper.cpp/ggml/src/ggml-quants.c")
+        .file("src/backend_stubs.cpp");
 
     // Common compiler flags
     build.flag_if_supported("-fPIC");

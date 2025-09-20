@@ -31,6 +31,10 @@ metal = ["whisper-sys/metal"]
 openblas = ["whisper-sys/openblas"]
 async = ["tokio"]
 
+[[example]]
+name = "basic"
+path = "../examples/basic.rs"
+
 [[bench]]
 name = "transcription"
 harness = false
