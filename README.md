@@ -475,6 +475,49 @@ cargo clean
 cargo build
 ```
 
+### Build Optimization & Caching
+
+When using whisper-cpp-rs as a local dependency, the C++ compilation can take several minutes on each build. We provide a prebuilt library system using `xtask` to cache the compiled whisper.cpp:
+
+#### Quick Setup
+
+```bash
+# Build and cache the library once (takes a few minutes)
+cargo xtask prebuild
+
+# Your subsequent builds will now use the cached library (< 1 second)
+cargo build
+```
+
+#### xtask Commands
+
+```bash
+# Build precompiled library
+cargo xtask prebuild
+
+# View available prebuilt libraries
+cargo xtask info
+
+# Clean cached libraries
+cargo xtask clean
+
+# Advanced options
+cargo xtask prebuild --profile debug  # Debug build
+cargo xtask prebuild --force          # Force rebuild
+```
+
+#### Using in Your Project
+
+Once you've run `cargo xtask prebuild`, the library will be automatically detected. For explicit configuration, set:
+
+```toml
+# In your project's .cargo/config.toml
+[env]
+WHISPER_PREBUILT_PATH = "path/to/whisper-cpp-wrapper/prebuilt/x86_64-pc-windows-msvc/release"
+```
+
+This reduces build times from several minutes to under 1 second. See [CACHING_GUIDE.md](CACHING_GUIDE.md) for detailed instructions.
+
 ## License
 
 This project is dual-licensed under either:
