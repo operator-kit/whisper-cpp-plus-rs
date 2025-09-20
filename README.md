@@ -276,13 +276,16 @@ cargo test --lib
 
 ```bash
 # Integration tests
-cargo test --test integration      # Core integration tests
+cargo test --test integration       # Core integration tests
 
 # Real audio transcription tests
-cargo test --test real_audio       # Tests with actual audio files
+cargo test --test real_audio        # Tests with actual audio files
 
 # Type safety verification
-cargo test --test type_safety      # Comprehensive type safety tests
+cargo test --test type_safety       # Comprehensive type safety tests
+
+# VAD integration tests
+cargo test --test vad_integration   # Test with Silero if downloaded
 ```
 
 ### Feature-Specific Testing

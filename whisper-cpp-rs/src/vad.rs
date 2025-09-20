@@ -240,12 +240,14 @@ impl VadSegments {
 
     /// Get segment start time in seconds
     pub fn get_segment_t0(&self, i_segment: i32) -> f32 {
-        unsafe { ffi::whisper_vad_segments_get_segment_t0(self.ptr, i_segment) }
+        // The FFI returns time in centiseconds, convert to seconds
+        unsafe { ffi::whisper_vad_segments_get_segment_t0(self.ptr, i_segment) / 100.0 }
     }
 
     /// Get segment end time in seconds
     pub fn get_segment_t1(&self, i_segment: i32) -> f32 {
-        unsafe { ffi::whisper_vad_segments_get_segment_t1(self.ptr, i_segment) }
+        // The FFI returns time in centiseconds, convert to seconds
+        unsafe { ffi::whisper_vad_segments_get_segment_t1(self.ptr, i_segment) / 100.0 }
     }
 
     /// Get all segments as tuples of (start, end) times in seconds
