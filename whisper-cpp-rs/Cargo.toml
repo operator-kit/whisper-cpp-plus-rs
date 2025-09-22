@@ -39,6 +39,14 @@ path = "../examples/basic.rs"
 name = "minimal"
 path = "../examples/minimal.rs"
 
+[[example]]
+name = "streaming"
+path = "../examples/streaming.rs"
+
+[[example]]
+name = "streaming_reuse_demo"
+path = "../examples/streaming_reuse_demo.rs"
+
 [[bench]]
 name = "transcription"
 harness = false

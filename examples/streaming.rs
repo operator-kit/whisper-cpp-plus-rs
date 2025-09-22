@@ -1,12 +1,13 @@
-//! Example of streaming transcription
+//! Example of streaming transcription with stream reuse
 //!
 //! This example demonstrates how to use WhisperStream for real-time
-//! transcription of audio chunks as they arrive.
+//! transcription of audio chunks as they arrive, and how to efficiently
+//! reuse the stream across multiple sessions.
 
 use std::path::Path;
 use std::time::Duration;
 use whisper_cpp_rs::{
-    FullParams, SamplingStrategy, StreamConfig, StreamConfigBuilder, WhisperContext, WhisperStream,
+    FullParams, SamplingStrategy, StreamConfigBuilder, WhisperContext, WhisperStream,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -35,25 +36,61 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .no_timestamps(false)
         .print_progress(false);
 
-    // Create the stream
+    // Create the stream ONCE - we'll reuse it for multiple sessions
     let mut stream = WhisperStream::with_config(&context, params, stream_config)?;
 
     println!("Streaming transcription initialized!");
-    println!("Simulating real-time audio input...\n");
+    println!("Demonstrating stream reuse across multiple sessions...\n");
 
+    // Simulate multiple streaming sessions (e.g., multiple recordings)
+    for session in 1..=3 {
+        println!("=== SESSION {} ===", session);
+
+        // For sessions 2 and onwards, reset the stream
+        // This efficiently reuses the WhisperState (no model/ram reallocation)
+        if session > 1 {
+            println!("Resetting stream for new session (reusing state)...");
+            stream.reset()?;
+            // Note: We're reusing the same WhisperState internally
+        }
+
+        // Simulate streaming for this session
+        process_audio_session(&mut stream, session)?;
+
+        println!("Session {} complete!\n", session);
+        std::thread::sleep(Duration::from_secs(1));
+    }
+
+    // Example: If you need to completely recreate the state
+    // (e.g., after an error or switching audio sources dramatically)
+    println!("Demonstrating state recreation...");
+    stream.recreate_state()?;  // This WILL reallocate the state (expensive!)
+    println!("State recreated - use this sparingly!");
+
+    println!("\nAll sessions complete!");
+
+    Ok(())
+}
+
+/// Process a single audio session
+fn process_audio_session(stream: &mut WhisperStream, session_num: usize) -> Result<(), Box<dyn std::error::Error>> {
     // Simulate streaming audio input
-    // In a real application, this would come from microphone, network, etc.
     let chunk_size = 16000; // 1 second chunks at 16kHz
 
-    // Load sample audio (or generate silence for testing)
-    let sample_audio = load_sample_audio()?;
+    // For demo, we'll use shorter audio for sessions 2 and 3
+    let duration_seconds = if session_num == 1 { 5 } else { 3 };
+    let sample_audio = generate_demo_audio(duration_seconds)?;
 
     // Process audio in chunks to simulate streaming
-    for (i, chunk) in sample_audio.chunks(chunk_size).enumerate() {
-        // Simulate real-time delay
-        std::thread::sleep(Duration::from_millis(500));
+    let mut chunk_count = 0;
+    for chunk in sample_audio.chunks(chunk_size) {
+        chunk_count += 1;
 
-        println!("Feeding chunk {} ({} samples)...", i + 1, chunk.len());
+        // Simulate real-time delay
+        std::thread::sleep(Duration::from_millis(300));
+
+        println!("  Session {}, Chunk {}: {} samples",
+                 session_num, chunk_count, chunk.len());
         stream.feed_audio(chunk);
 
         // Process pending audio
@@ -62,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Print new segments
         for segment in segments {
             println!(
-                "[{:.2}s - {:.2}s]: {}",
+                "  [{:.2}s - {:.2}s]: {}",
                 segment.start_seconds(),
                 segment.end_seconds(),
                 segment.text
@@ -71,35 +108,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Flush any remaining audio
-    println!("\nFlushing stream...");
     let final_segments = stream.flush()?;
     for segment in final_segments {
         println!(
-            "[{:.2}s - {:.2}s]: {}",
+            "  [{:.2}s - {:.2}s]: {}",
             segment.start_seconds(),
             segment.end_seconds(),
             segment.text
         );
     }
 
-    println!("\nTotal processed samples: {}", stream.processed_samples());
-    println!("Streaming transcription complete!");
+    println!("  Processed {} samples total", stream.processed_samples());
 
     Ok(())
 }
 
-/// Load sample audio for demonstration
-fn load_sample_audio() -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+/// Generate demo audio for a session
+fn generate_demo_audio(duration_seconds: usize) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     // Try to load the JFK sample if it exists
     let jfk_path = "vendor/whisper.cpp/samples/jfk.wav";
 
     if Path::new(jfk_path).exists() {
-        println!("Loading JFK sample audio...");
-        load_wav_16khz_mono(jfk_path)
+        println!("  Loading JFK sample audio...");
+        let audio = load_wav_16khz_mono(jfk_path)?;
+        // Truncate to requested duration
+        let samples_needed = 16000 * duration_seconds;
+        Ok(audio.into_iter().take(samples_needed).collect())
     } else {
         // Generate simulated audio (silence with some noise)
-        println!("Generating simulated audio (10 seconds)...");
-        let mut audio = vec![0.0f32; 16000 * 10]; // 10 seconds
+        println!("  Generating simulated audio ({} seconds)...", duration_seconds);
+        let mut audio = vec![0.0f32; 16000 * duration_seconds];
 
         // Add very slight noise to prevent complete silence
         for sample in audio.iter_mut() {

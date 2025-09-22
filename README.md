@@ -484,6 +484,8 @@ When using whisper-cpp-rs as a local dependency, the C++ compilation can take se
 ```bash
 # Build and cache the library once (takes a few minutes)
 cargo xtask prebuild
+# Force rebuild if one already exists.
+cargo xtask prebuild --force
 
 # Your subsequent builds will now use the cached library (< 1 second)
 cargo build
