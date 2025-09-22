@@ -307,18 +307,100 @@ cargo test --lib --features async async_api::tests::test_async_stream
 cargo test --features async -- --nocapture
 ```
 
-### Performance Testing
+### Running Examples
+
+The crate includes several example programs demonstrating various features:
+
+#### Core Examples
 
 ```bash
-# Run benchmarks
+# Basic transcription example
+cargo run --example basic --release
+
+# Minimal example with simple transcription
+cargo run --example minimal --release
+
+# Streaming transcription demo
+cargo run --example streaming --release
+
+# Streaming with context reuse
+cargo run --example streaming_reuse_demo --release
+```
+
+#### Enhanced Feature Examples
+
+```bash
+# Compare standard vs enhanced VAD (shows segment reduction)
+cargo run --example compare_vad --release
+
+# Enhanced VAD with segment aggregation (reduces API calls)
+cargo run --example enhanced_vad --release
+
+# Temperature fallback for difficult audio (improves accuracy)
+cargo run --example temperature_fallback --release
+```
+
+**Note**: Examples require model files in `whisper-cpp-rs/tests/models/`. The compare_vad example will show real performance differences between standard and enhanced VAD processing.
+
+### Performance Testing & Benchmarks
+
+#### Running All Benchmarks
+
+```bash
+# Run all benchmarks
 cargo bench
 
-# Run specific benchmark
-cargo bench transcription
+# Run with baseline comparison
+cargo bench -- --save-baseline my-baseline
+cargo bench -- --baseline my-baseline
+```
+
+#### Individual Benchmarks
+
+```bash
+# Core transcription benchmark
+cargo bench --bench transcription
+
+# Enhanced VAD benchmarks
+cargo bench --bench enhanced_vad_bench
+
+# Run specific VAD benchmark
+cargo bench --bench enhanced_vad_bench segment_aggregation
+cargo bench --bench enhanced_vad_bench vad_processing
+cargo bench --bench enhanced_vad_bench vad_efficiency
+
+# Enhanced fallback benchmarks
+cargo bench --bench enhanced_fallback_bench
+
+# Run specific fallback benchmark
+cargo bench --bench enhanced_fallback_bench compression_ratio
+cargo bench --bench enhanced_fallback_bench quality_checks
+```
+
+#### Quick Benchmark Runs
+
+For faster iteration during development:
+
+```bash
+# Run with reduced timing
+cargo bench --bench enhanced_vad_bench segment_aggregation -- --warm-up-time 1 --measurement-time 2
 
 # Profile with release mode
 cargo test --release
 ```
+
+#### Interpreting Benchmark Results
+
+- **segment_aggregation**: Shows nanosecond-level efficiency of merging segments
+- **vad_processing**: Compares standard vs enhanced VAD processing times
+- **vad_efficiency**: Measures segment count reduction and total speech duration
+- **compression_ratio**: Tests text compression ratio calculation performance
+- **quality_checks**: Benchmarks transcription quality validation
+
+Expected improvements:
+- VAD segment reduction: 20-30% fewer chunks with real audio
+- Processing speed: 100x+ real-time for VAD operations
+- Aggregation overhead: Negligible (nanoseconds)
 
 ### Test Coverage Summary
 

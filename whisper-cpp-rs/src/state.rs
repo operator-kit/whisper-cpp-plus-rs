@@ -5,8 +5,8 @@ use std::sync::Arc;
 use whisper_sys as ffi;
 
 pub struct WhisperState {
-    ptr: *mut ffi::whisper_state,
-    _context: Arc<ContextPtr>,
+    pub(crate) ptr: *mut ffi::whisper_state,
+    pub(crate) _context: Arc<ContextPtr>,
 }
 
 impl Drop for WhisperState {

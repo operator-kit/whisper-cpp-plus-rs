@@ -15,6 +15,7 @@ readme = "README.md"
 whisper-sys = { path = "../whisper-sys", version = "0.1.0" }
 thiserror = { workspace = true }
 num_cpus = { workspace = true }
+flate2 = "1.0"
 
 # Optional dependencies
 tokio = { version = "1.35", features = ["full"], optional = true }
@@ -23,6 +24,7 @@ tokio = { version = "1.35", features = ["full"], optional = true }
 tokio = { version = "1.35", features = ["full"] }
 hound = "3.5"
 criterion = "0.5"
+rand = "0.8"
 
 [features]
 default = []
@@ -33,22 +35,34 @@ async = ["tokio"]
 
 [[example]]
 name = "basic"
-path = "../examples/basic.rs"
+path = "examples/basic.rs"
 
 [[example]]
 name = "minimal"
-path = "../examples/minimal.rs"
+path = "examples/minimal.rs"
 
 [[example]]
 name = "streaming"
-path = "../examples/streaming.rs"
+path = "examples/streaming.rs"
 
 [[example]]
 name = "streaming_reuse_demo"
-path = "../examples/streaming_reuse_demo.rs"
+path = "examples/streaming_reuse_demo.rs"
+
+[[example]]
+name = "compare_vad"
+path = "examples/compare_vad.rs"
 
 [[bench]]
 name = "transcription"
+harness = false
+
+[[bench]]
+name = "enhanced_vad_bench"
+harness = false
+
+[[bench]]
+name = "enhanced_fallback_bench"
 harness = false
 
 [package.metadata.docs.rs]

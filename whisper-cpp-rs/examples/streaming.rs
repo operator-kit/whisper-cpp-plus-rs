@@ -126,7 +126,7 @@ fn process_audio_session(stream: &mut WhisperStream, session_num: usize) -> Resu
 /// Generate demo audio for a session
 fn generate_demo_audio(duration_seconds: usize) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     // Try to load the JFK sample if it exists
-    let jfk_path = "vendor/whisper.cpp/samples/jfk.wav";
+    let jfk_path = "../vendor/whisper.cpp/samples/jfk.wav";
 
     if Path::new(jfk_path).exists() {
         println!("  Loading JFK sample audio...");

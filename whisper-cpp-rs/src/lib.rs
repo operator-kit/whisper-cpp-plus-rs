@@ -54,6 +54,8 @@ mod state;
 mod stream;
 mod vad;
 
+pub mod enhanced;
+
 #[cfg(feature = "async")]
 mod async_api;
 
@@ -67,6 +69,12 @@ pub use stream::{StreamConfig, StreamConfigBuilder, WhisperStream};
 pub use vad::{
     VadContextParams, VadParams, VadParamsBuilder, VadProcessor, VadSegments,
 };
+
+// Re-export for benchmarks
+#[doc(hidden)]
+pub mod bench_helpers {
+    pub use crate::vad::{VadProcessor, VadParams};
+}
 
 #[cfg(feature = "async")]
 pub use async_api::{AsyncWhisperStream, SharedAsyncStream};
@@ -178,6 +186,66 @@ impl WhisperContext {
     /// which can be more efficient than creating a new state each time.
     pub fn create_state(&self) -> Result<WhisperState> {
         WhisperState::new(self)
+    }
+
+    /// Enhanced transcription with custom parameters and temperature fallback
+    ///
+    /// This method provides quality-based retry with multiple temperatures
+    /// if the initial transcription doesn't meet quality thresholds.
+    ///
+    /// # Arguments
+    /// * `audio` - Audio samples (must be 16kHz mono f32)
+    /// * `params` - Custom transcription parameters
+    ///
+    /// # Returns
+    /// A `TranscriptionResult` containing the full text and individual segments
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use whisper_cpp_rs::{WhisperContext, TranscriptionParams};
+    /// # fn main() -> whisper_cpp_rs::Result<()> {
+    /// let ctx = WhisperContext::new("model.bin")?;
+    /// let params = TranscriptionParams::builder()
+    ///     .language("en")
+    ///     .build();
+    /// let audio = vec![0.0f32; 16000];
+    /// let result = ctx.transcribe_with_params_enhanced(&audio, params)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn transcribe_with_params_enhanced(
+        &self,
+        audio: &[f32],
+        params: TranscriptionParams,
+    ) -> Result<TranscriptionResult> {
+        self.transcribe_with_full_params_enhanced(audio, params.into_full_params())
+    }
+
+    /// Enhanced transcription with full parameters and temperature fallback
+    ///
+    /// This method provides quality-based retry with multiple temperatures
+    /// if the initial transcription doesn't meet quality thresholds.
+    ///
+    /// # Arguments
+    /// * `audio` - Audio samples (must be 16kHz mono f32)
+    /// * `params` - Full parameter configuration
+    ///
+    /// # Returns
+    /// A `TranscriptionResult` containing the full text and individual segments
+    pub fn transcribe_with_full_params_enhanced(
+        &self,
+        audio: &[f32],
+        params: FullParams,
+    ) -> Result<TranscriptionResult> {
+        use crate::enhanced::fallback::{EnhancedTranscriptionParams, EnhancedWhisperState};
+
+        // Convert to enhanced params with default fallback settings
+        let enhanced_params = EnhancedTranscriptionParams::from_base(params);
+
+        // Use enhanced state with temperature fallback logic
+        let mut state = self.create_state()?;
+        let mut enhanced_state = EnhancedWhisperState::new(&mut state);
+        enhanced_state.transcribe_with_fallback(enhanced_params, audio)
     }
 }
 
