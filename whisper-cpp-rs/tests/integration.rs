@@ -1,18 +1,20 @@
-use std::path::Path;
+mod common;
+
 use std::sync::Arc;
+use common::TestModels;
 use whisper_cpp_rs::{
     FullParams, SamplingStrategy, TranscriptionParams, WhisperContext, WhisperError,
 };
 
 #[test]
 fn test_model_loading() {
-    let ctx = WhisperContext::new("tests/models/ggml-tiny.en.bin");
-    if Path::new("tests/models/ggml-tiny.en.bin").exists() {
-        assert!(ctx.is_ok());
-    } else {
-        assert!(ctx.is_err());
-        eprintln!("Note: Model file not found, expected for CI");
-    }
+    let Some(model_path) = TestModels::tiny_en() else {
+        eprintln!("Skipping test: model file not found (expected in CI)");
+        return;
+    };
+
+    let ctx = WhisperContext::new(&model_path);
+    assert!(ctx.is_ok(), "Failed to load model from {:?}", model_path);
 }
 
 #[test]
@@ -27,13 +29,12 @@ fn test_invalid_model_path() {
 
 #[test]
 fn test_silence_handling() {
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping test: model file not found");
         return;
-    }
+    };
 
-    let ctx = WhisperContext::new(model_path).unwrap();
+    let ctx = WhisperContext::new(&model_path).unwrap();
     let silence = vec![0.0f32; 16000]; // 1 second of silence
     let result = ctx.transcribe(&silence);
     assert!(result.is_ok());
@@ -45,13 +46,12 @@ fn test_silence_handling() {
 
 #[test]
 fn test_concurrent_states() {
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping test: model file not found");
         return;
-    }
+    };
 
-    let ctx = Arc::new(WhisperContext::new(model_path).unwrap());
+    let ctx = Arc::new(WhisperContext::new(&model_path).unwrap());
     let handles: Vec<_> = (0..4)
         .map(|_| {
             let ctx = Arc::clone(&ctx);
@@ -69,13 +69,12 @@ fn test_concurrent_states() {
 
 #[test]
 fn test_transcription_with_params() {
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping test: model file not found");
         return;
-    }
+    };
 
-    let ctx = WhisperContext::new(model_path).unwrap();
+    let ctx = WhisperContext::new(&model_path).unwrap();
     let audio = vec![0.0f32; 16000 * 3]; // 3 seconds of silence
 
     let params = TranscriptionParams::builder()
@@ -130,19 +129,20 @@ fn test_beam_search_strategy() {
 
 #[test]
 fn test_model_info() {
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping test: model file not found");
         return;
-    }
+    };
 
-    let ctx = WhisperContext::new(model_path).unwrap();
+    let ctx = WhisperContext::new(&model_path).unwrap();
 
-    // Test model information methods
-    assert!(ctx.n_vocab() > 0);
-    assert!(ctx.n_audio_ctx() > 0);
-    assert!(ctx.n_text_ctx() > 0);
-    assert!(ctx.n_len() > 0);
+    // Test model information methods (static model properties)
+    assert!(ctx.n_vocab() > 0, "n_vocab should be positive");
+    assert!(ctx.n_audio_ctx() > 0, "n_audio_ctx should be positive");
+    assert!(ctx.n_text_ctx() > 0, "n_text_ctx should be positive");
+
+    // Note: n_len() returns mel spectrogram length, which is 0 until audio is processed.
+    // It's a state property, not a model property - don't test it here.
 
     // tiny.en model is English-only
     assert!(!ctx.is_multilingual());
@@ -150,13 +150,12 @@ fn test_model_info() {
 
 #[test]
 fn test_segment_timestamps() {
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping test: model file not found");
         return;
-    }
+    };
 
-    let ctx = WhisperContext::new(model_path).unwrap();
+    let ctx = WhisperContext::new(&model_path).unwrap();
     let audio = vec![0.0f32; 16000 * 2]; // 2 seconds
 
     let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
@@ -178,13 +177,12 @@ fn test_segment_timestamps() {
 
 #[test]
 fn test_state_reuse() {
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping test: model file not found");
         return;
-    }
+    };
 
-    let ctx = WhisperContext::new(model_path).unwrap();
+    let ctx = WhisperContext::new(&model_path).unwrap();
     let mut state = ctx.create_state().unwrap();
 
     let audio1 = vec![0.0f32; 16000]; // 1 second
@@ -207,13 +205,12 @@ fn test_state_reuse() {
 
 #[test]
 fn test_empty_audio_error() {
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping test: model file not found");
         return;
-    }
+    };
 
-    let ctx = WhisperContext::new(model_path).unwrap();
+    let ctx = WhisperContext::new(&model_path).unwrap();
     let empty_audio = vec![];
 
     let result = ctx.transcribe(&empty_audio);

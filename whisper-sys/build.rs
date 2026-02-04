@@ -166,6 +166,9 @@ fn build_whisper_cpp(target_os: &str, target_arch: &str) {
     // Add definitions for memory alignment and features
     build.define("_ALIGNAS_SUPPORTED", None);
     build.define("GGML_USE_CPU", None);
+    build.define("WHISPER_VERSION", Some("\"1.8.3\""));
+    build.define("GGML_VERSION", Some("\"0.9.5\""));
+    build.define("GGML_COMMIT", Some("\"unknown\""));
 
     // Platform-specific configuration
     match target_os {

@@ -167,6 +167,9 @@ fn build_whisper_cpp(target: &str, profile: &str, output_dir: &Path) -> Result<(
     build.flag_if_supported("-fPIC");
     build.define("_ALIGNAS_SUPPORTED", None);
     build.define("GGML_USE_CPU", None);
+    build.define("WHISPER_VERSION", Some("\"1.8.3\""));
+    build.define("GGML_VERSION", Some("\"0.9.5\""));
+    build.define("GGML_COMMIT", Some("\"unknown\""));
 
     // Platform-specific configuration
     if target.contains("windows") {

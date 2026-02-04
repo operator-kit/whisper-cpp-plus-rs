@@ -1,20 +1,16 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use whisper_cpp_rs::{WhisperContext, FullParams, SamplingStrategy};
 use hound;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Check if model exists
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
-        eprintln!("Error: Model file not found at {}", model_path);
-        eprintln!("Please download a model file first.");
-        eprintln!("You can download the tiny.en model from:");
-        eprintln!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin");
-        return Ok(());
-    }
+    // Find model using flexible path resolution
+    let model_path = find_model("ggml-tiny.en.bin")
+        .ok_or("Model file not found. Please download a model or set WHISPER_MODEL_PATH.\n\
+                You can download the tiny.en model from:\n\
+                https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin")?;
 
-    println!("Loading Whisper model from {}...", model_path);
-    let ctx = WhisperContext::new(model_path)?;
+    println!("Loading Whisper model from {:?}...", model_path);
+    let ctx = WhisperContext::new(&model_path)?;
 
     println!("Model loaded successfully!");
     println!("Model info:");
@@ -25,24 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load real audio for testing
     println!("\nLoading test audio...");
-    let audio_path = "vendor/whisper.cpp/samples/jfk.wav";
-    let audio = if Path::new(audio_path).exists() {
-        println!("Loading audio from: {}", audio_path);
-        load_wav_file(audio_path)?
-    } else {
-        eprintln!("Error: Audio file not found at {}", audio_path);
-        eprintln!("Please ensure whisper.cpp repository is in vendor/ with sample files.");
-        eprintln!("Or provide your own audio file at samples/test.wav");
-
-        // Try alternative path
-        let alt_path = "samples/test.wav";
-        if Path::new(alt_path).exists() {
-            println!("Loading alternative audio from: {}", alt_path);
-            load_wav_file(alt_path)?
-        } else {
-            return Err(format!("No audio files found. Please provide audio at:\n  - {}\n  - {}", audio_path, alt_path).into());
-        }
-    };
+    let audio = find_and_load_audio()?;
 
     // Transcribe with default parameters
     println!("Transcribing with default parameters...");
@@ -75,6 +54,65 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nSuccess! The whisper.cpp Rust wrapper is working correctly.");
 
     Ok(())
+}
+
+/// Find model file in common locations
+fn find_model(name: &str) -> Option<PathBuf> {
+    // Check env var first
+    if let Ok(dir) = std::env::var("WHISPER_MODEL_PATH") {
+        let path = Path::new(&dir).join(name);
+        if path.exists() {
+            return Some(path);
+        }
+        // Also try if env var points directly to a model file
+        let path = PathBuf::from(&dir);
+        if path.exists() && path.is_file() {
+            return Some(path);
+        }
+    }
+
+    // Common locations to check
+    let search_paths = [
+        // Workspace-relative (running from root)
+        format!("whisper-cpp-rs/tests/models/{}", name),
+        // Crate-relative (running from whisper-cpp-rs/)
+        format!("tests/models/{}", name),
+        // whisper.cpp models directory
+        format!("vendor/whisper.cpp/models/{}", name),
+        // Current directory
+        name.to_string(),
+    ];
+
+    for path_str in &search_paths {
+        let path = PathBuf::from(path_str);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+/// Find and load audio file
+fn find_and_load_audio() -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+    let audio_paths = [
+        // whisper.cpp samples
+        "vendor/whisper.cpp/samples/jfk.wav",
+        // Crate test audio
+        "tests/audio/jfk.wav",
+        "whisper-cpp-rs/tests/audio/jfk.wav",
+        // User samples
+        "samples/test.wav",
+    ];
+
+    for path in &audio_paths {
+        if Path::new(path).exists() {
+            println!("Loading audio from: {}", path);
+            return load_wav_file(path);
+        }
+    }
+
+    Err("No audio files found. Please provide audio at vendor/whisper.cpp/samples/jfk.wav".into())
 }
 
 fn load_wav_file(path: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
