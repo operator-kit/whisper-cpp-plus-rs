@@ -52,6 +52,7 @@ mod error;
 mod params;
 mod state;
 mod stream;
+mod stream_pcm;
 mod vad;
 
 pub mod enhanced;
@@ -66,6 +67,9 @@ pub use params::{
 };
 pub use state::{Segment, TranscriptionResult, WhisperState};
 pub use stream::{StreamConfig, StreamConfigBuilder, WhisperStream};
+pub use stream_pcm::{
+    PcmFormat, PcmReader, PcmReaderConfig, StreamPcm, StreamPcmConfig, vad_simple,
+};
 pub use vad::{
     VadContextParams, VadParams, VadParamsBuilder, VadProcessor, VadSegments,
 };
