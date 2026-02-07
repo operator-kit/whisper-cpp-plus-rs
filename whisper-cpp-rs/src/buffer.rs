@@ -61,11 +61,6 @@ impl AudioBuffer {
         Some(chunk)
     }
 
-    /// Get a view of the buffer without removing samples
-    pub fn peek(&self, size: usize) -> Vec<f32> {
-        self.buffer.iter().take(size).copied().collect()
-    }
-
     /// Clear all samples from the buffer
     pub fn clear(&mut self) {
         self.buffer.clear();
@@ -74,85 +69,6 @@ impl AudioBuffer {
     /// Drain all samples from the buffer
     pub fn drain_all(&mut self) -> Vec<f32> {
         self.buffer.drain(..).collect()
-    }
-}
-
-/// A pool of reusable audio buffers for zero-allocation streaming
-pub struct BufferPool {
-    buffers: Vec<Vec<f32>>,
-    available: VecDeque<usize>,
-    buffer_size: usize,
-}
-
-impl BufferPool {
-    /// Create a new buffer pool
-    pub fn new(count: usize, buffer_size: usize) -> Self {
-        let mut buffers = Vec::with_capacity(count);
-        let mut available = VecDeque::with_capacity(count);
-
-        for i in 0..count {
-            let mut buffer = Vec::with_capacity(buffer_size);
-            buffer.resize(buffer_size, 0.0);
-            buffers.push(buffer);
-            available.push_back(i);
-        }
-
-        Self {
-            buffers,
-            available,
-            buffer_size,
-        }
-    }
-
-    /// Acquire a buffer from the pool
-    pub fn acquire(&mut self) -> Option<BufferHandle> {
-        self.available.pop_front().map(|index| BufferHandle {
-            pool: self as *mut BufferPool,
-            index,
-        })
-    }
-
-    /// Return a buffer to the pool (internal use)
-    fn release(&mut self, index: usize) {
-        // Clear the buffer before returning it to the pool
-        self.buffers[index].fill(0.0);
-        self.available.push_back(index);
-    }
-
-    /// Get a reference to a buffer by index
-    fn get_buffer(&self, index: usize) -> &[f32] {
-        &self.buffers[index]
-    }
-
-    /// Get a mutable reference to a buffer by index
-    fn get_buffer_mut(&mut self, index: usize) -> &mut Vec<f32> {
-        &mut self.buffers[index]
-    }
-}
-
-/// A handle to a buffer from the pool
-pub struct BufferHandle {
-    pool: *mut BufferPool,
-    index: usize,
-}
-
-impl BufferHandle {
-    /// Get the buffer as a slice
-    pub fn as_slice(&self) -> &[f32] {
-        unsafe { (*self.pool).get_buffer(self.index) }
-    }
-
-    /// Get the buffer as a mutable vector
-    pub fn as_mut_vec(&mut self) -> &mut Vec<f32> {
-        unsafe { (*self.pool).get_buffer_mut(self.index) }
-    }
-}
-
-impl Drop for BufferHandle {
-    fn drop(&mut self) {
-        unsafe {
-            (*self.pool).release(self.index);
-        }
     }
 }
 
@@ -187,29 +103,8 @@ mod tests {
         // Push more samples, should remove oldest
         buffer.push_samples(&[6.0, 7.0]);
         assert_eq!(buffer.len(), 5);
-        assert_eq!(buffer.peek(5), vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-    }
-
-    #[test]
-    fn test_buffer_pool() {
-        let mut pool = BufferPool::new(2, 10);
-
-        // Acquire buffers
-        let handle1 = pool.acquire();
-        assert!(handle1.is_some());
-
-        let handle2 = pool.acquire();
-        assert!(handle2.is_some());
-
-        // Pool exhausted
-        let handle3 = pool.acquire();
-        assert!(handle3.is_none());
-
-        // Return a buffer
-        drop(handle1);
-
-        // Can acquire again
-        let handle4 = pool.acquire();
-        assert!(handle4.is_some());
+        // Verify newest samples are at the end via extract
+        let chunk = buffer.extract_chunk(5, 0).unwrap();
+        assert_eq!(chunk, vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     }
 }

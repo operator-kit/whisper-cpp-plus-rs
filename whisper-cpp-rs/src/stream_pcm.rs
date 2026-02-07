@@ -207,27 +207,24 @@ fn reader_loop(
         }
 
         // Convert to f32
-        let mut samples = vec![0.0f32; n_samples];
-        match format {
+        let samples: Vec<f32> = match format {
             PcmFormat::F32 => {
-                for i in 0..n_samples {
-                    let offset = i * 4;
-                    samples[i] = f32::from_le_bytes([
-                        data[offset],
-                        data[offset + 1],
-                        data[offset + 2],
-                        data[offset + 3],
-                    ]);
-                }
+                (0..n_samples)
+                    .map(|i| {
+                        let o = i * 4;
+                        f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]])
+                    })
+                    .collect()
             }
             PcmFormat::S16 => {
-                for i in 0..n_samples {
-                    let offset = i * 2;
-                    let v = i16::from_le_bytes([data[offset], data[offset + 1]]);
-                    samples[i] = v as f32 / 32768.0;
-                }
+                (0..n_samples)
+                    .map(|i| {
+                        let o = i * 2;
+                        i16::from_le_bytes([data[o], data[o + 1]]) as f32 / 32768.0
+                    })
+                    .collect()
             }
-        }
+        };
 
         // Push into ring buffer
         push_samples(&shared, &samples);
@@ -388,7 +385,6 @@ impl Default for StreamPcmConfig {
 /// - **Fixed-step** (`use_vad = false`): process `step_ms` chunks with overlap.
 /// - **VAD-driven** (`use_vad = true`): accumulate speech, transcribe on silence.
 pub struct StreamPcm {
-    ctx: WhisperContext,
     state: WhisperState,
     params: FullParams,
     config: StreamPcmConfig,
@@ -408,7 +404,6 @@ pub struct StreamPcm {
     speech_buf: Vec<f32>,
     pre_roll: Vec<f32>,
     silence_samples: usize,
-    segment_start_sample: i64,
 
     total_samples: i64,
     n_iter: i32,
@@ -478,14 +473,13 @@ impl StreamPcm {
             (config.keep_ms as f64 * 0.001 * WHISPER_SAMPLE_RATE as f64) as usize;
 
         let vad_probe_ms = config.vad_probe_ms.max(1);
-        let vad_last_ms = (vad_probe_ms / 2).max(1).min(1000);
+        let vad_last_ms = (vad_probe_ms / 2).clamp(1, 1000);
         let vad_pre_roll_samples =
             (WHISPER_SAMPLE_RATE as usize * config.vad_pre_roll_ms.max(0) as usize) / 1000;
         let vad_silence_samples =
             (WHISPER_SAMPLE_RATE as usize * config.vad_silence_ms.max(0) as usize) / 1000;
 
         Ok(Self {
-            ctx: ctx.clone(),
             state,
             params,
             config: config.clone(),
@@ -499,7 +493,6 @@ impl StreamPcm {
             speech_buf: Vec::new(),
             pre_roll: Vec::new(),
             silence_samples: 0,
-            segment_start_sample: 0,
             total_samples: 0,
             n_iter: 0,
             vad_last_ms,
@@ -542,10 +535,8 @@ impl StreamPcm {
                     if self.reader.is_eof() && self.reader.available_samples() == 0 {
                         // Flush any remaining VAD speech
                         if self.config.use_vad && self.in_speech && !self.speech_buf.is_empty() {
-                            let seg_end =
-                                self.segment_start_sample + self.speech_buf.len() as i64;
                             let segments =
-                                self.run_inference(&self.speech_buf.clone(), self.segment_start_sample, seg_end)?;
+                                self.run_inference(&self.speech_buf.clone())?;
                             if !segments.is_empty() {
                                 let start =
                                     segments.first().map(|s| s.start_ms).unwrap_or(0);
@@ -583,11 +574,7 @@ impl StreamPcm {
 
         let pcmf32_new = self.reader.pop_ms(self.config.step_ms);
         if pcmf32_new.is_empty() {
-            return if self.reader.is_eof() {
-                Ok(None)
-            } else {
-                Ok(None)
-            };
+            return Ok(None);
         }
 
         self.total_samples += pcmf32_new.len() as i64;
@@ -609,7 +596,7 @@ impl StreamPcm {
 
         self.pcmf32_old = pcmf32.clone();
 
-        let segments = self.run_inference(&pcmf32, -1, -1)?;
+        let segments = self.run_inference(&pcmf32)?;
         self.n_iter += 1;
 
         // Keep overlap for next iteration
@@ -629,11 +616,8 @@ impl StreamPcm {
             if self.reader.is_eof() {
                 // Flush remaining speech
                 if self.in_speech && !self.speech_buf.is_empty() {
-                    let seg_end = self.segment_start_sample + self.speech_buf.len() as i64;
                     let segments = self.run_inference(
                         &self.speech_buf.clone(),
-                        self.segment_start_sample,
-                        seg_end,
                     )?;
                     self.speech_buf.clear();
                     self.in_speech = false;
@@ -686,8 +670,6 @@ impl StreamPcm {
                     self.speech_buf.extend_from_slice(&self.pre_roll);
                 }
                 self.speech_buf.extend_from_slice(&pcmf32_new);
-                self.segment_start_sample =
-                    self.total_samples - self.speech_buf.len() as i64;
             }
         } else {
             self.speech_buf.extend_from_slice(&pcmf32_new);
@@ -700,11 +682,8 @@ impl StreamPcm {
             if self.speech_buf.len() >= self.vad_max_segment_samples
                 || self.silence_samples >= self.vad_silence_samples
             {
-                let seg_end = self.segment_start_sample + self.speech_buf.len() as i64;
                 let segments = self.run_inference(
                     &self.speech_buf.clone(),
-                    self.segment_start_sample,
-                    seg_end,
                 )?;
                 self.speech_buf.clear();
                 self.in_speech = false;
@@ -727,12 +706,7 @@ impl StreamPcm {
     }
 
     /// Run whisper inference on an audio buffer — port of `run_inference` lambda.
-    fn run_inference(
-        &mut self,
-        audio: &[f32],
-        _seg_start_sample: i64,
-        _seg_end_sample: i64,
-    ) -> Result<Vec<Segment>> {
+    fn run_inference(&mut self, audio: &[f32]) -> Result<Vec<Segment>> {
         if audio.is_empty() {
             return Ok(Vec::new());
         }

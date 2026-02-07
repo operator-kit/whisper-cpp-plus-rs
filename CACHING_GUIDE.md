@@ -38,10 +38,10 @@ Set the path explicitly if you've moved the prebuilt library:
 
 ```bash
 # Windows
-set WHISPER_PREBUILT_PATH=D:\projects\claude\whisper-cpp-wrapper\prebuilt\x86_64-pc-windows-msvc\release
+set WHISPER_PREBUILT_PATH=/path/to/whisper-cpp-rs\prebuilt\x86_64-pc-windows-msvc\release
 
 # Unix/Mac
-export WHISPER_PREBUILT_PATH=/path/to/whisper-cpp-wrapper/prebuilt/x86_64-unknown-linux-gnu/release
+export WHISPER_PREBUILT_PATH=/path/to/whisper-cpp-rs/prebuilt/x86_64-unknown-linux-gnu/release
 ```
 
 #### Option 3: Project Configuration
@@ -49,7 +49,7 @@ Add to your project's `.cargo/config.toml`:
 
 ```toml
 [env]
-WHISPER_PREBUILT_PATH = "D:/projects/claude/whisper-cpp-wrapper/prebuilt/x86_64-pc-windows-msvc/release"
+WHISPER_PREBUILT_PATH = "/path/to/whisper-cpp-rs/prebuilt/x86_64-pc-windows-msvc/release"
 ```
 
 ### Advanced Options
@@ -101,7 +101,7 @@ If both projects are yours, combine them into a workspace to share build artifac
 ```toml
 # In parent directory's Cargo.toml
 [workspace]
-members = ["whisper-cpp-wrapper", "your-project"]
+members = ["whisper-cpp-rs", "your-project"]
 resolver = "2"
 ```
 

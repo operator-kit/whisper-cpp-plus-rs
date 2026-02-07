@@ -1,14 +1,15 @@
 [package]
 name = "whisper-quantize"
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.70.0"
-authors = ["Your Name <your.email@example.com>"]
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/whisper-cpp-rs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Model quantization utilities for whisper-cpp-rs"
 keywords = ["whisper", "quantization", "compression", "ml", "optimization"]
 categories = ["science", "compression"]
+publish = false
 
 [dependencies]
 whisper-sys = { path = "../whisper-sys", features = ["quantization"] }

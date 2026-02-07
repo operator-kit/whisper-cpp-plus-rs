@@ -33,3 +33,4 @@ perf.data.old
 /target/criterion/
 
 .claude
+/agents/

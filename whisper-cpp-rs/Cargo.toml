@@ -9,7 +9,7 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Safe, idiomatic Rust bindings for whisper.cpp"
-readme = "README.md"
+readme = "../README.md"
 
 [dependencies]
 whisper-sys = { path = "../whisper-sys", version = "0.1.0" }
@@ -52,6 +52,19 @@ path = "examples/streaming_reuse_demo.rs"
 [[example]]
 name = "compare_vad"
 path = "examples/compare_vad.rs"
+
+[[example]]
+name = "enhanced_vad"
+path = "examples/enhanced_vad.rs"
+
+[[example]]
+name = "async_transcribe"
+path = "examples/async_transcribe.rs"
+required-features = ["async"]
+
+[[example]]
+name = "temperature_fallback"
+path = "examples/temperature_fallback.rs"
 
 [[bench]]
 name = "transcription"

@@ -27,6 +27,7 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let ctx = WhisperContext::new("path/to/model.bin")?;
+//! let audio = vec![0.0f32; 16000]; // 1 second of audio
 //!
 //! // Configure parameters using builder pattern
 //! let params = TranscriptionParams::builder()

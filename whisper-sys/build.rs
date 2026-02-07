@@ -108,11 +108,7 @@ fn build_whisper_cpp(target_os: &str, target_arch: &str) {
     build.cpp(true);
 
     // Set C++ standard - ggml-backend-reg.cpp requires C++17 for std::filesystem
-    if cfg!(target_env = "msvc") {
-        build.std("c++17");
-    } else {
-        build.std("c++17");
-    }
+    build.std("c++17");
 
     // Add include directories
     build.include("../vendor/whisper.cpp")
@@ -227,7 +223,7 @@ fn build_whisper_cpp(target_os: &str, target_arch: &str) {
                 .file("../vendor/whisper.cpp/ggml/src/ggml-cpu/arch/x86/cpu-feats.cpp");
 
             // Enable AVX/AVX2 if available
-            if !env::var("WHISPER_NO_AVX").is_ok() {
+            if env::var("WHISPER_NO_AVX").is_err() {
                 build.flag_if_supported("-mavx");
                 build.flag_if_supported("-mavx2");
                 build.flag_if_supported("-mfma");
