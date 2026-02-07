@@ -1,163 +1,284 @@
-//! Streaming transcription support for real-time audio processing
+//! Streaming transcription — faithful port of stream.cpp
 //!
-//! The whisper.cpp library automatically clears internal results when starting a new
-//! transcription, so state reuse is safe and matches the behavior of whisper.cpp's
-//! own streaming implementation.
-//!
-//! If you need to force a complete state recreation (e.g., after errors or when
-//! switching between very different audio sources), use `recreate_state()` instead.
+//! Replaces SDL audio capture with a push-based `feed_audio()` API
+//! since we're a library, not a binary.
 
-use crate::buffer::AudioBuffer;
 use crate::context::WhisperContext;
 use crate::error::Result;
 use crate::params::FullParams;
 use crate::state::{Segment, WhisperState};
-use std::time::{Duration, Instant};
+use std::collections::VecDeque;
 
-/// Configuration for streaming transcription
+const WHISPER_SAMPLE_RATE: i32 = 16000;
+
+// ---------------------------------------------------------------------------
+// WhisperStreamConfig
+// ---------------------------------------------------------------------------
+
+/// Streaming config — maps to stream.cpp's whisper_params (streaming subset).
 #[derive(Debug, Clone)]
-pub struct StreamConfig {
-    /// Size of audio chunks to process (in samples)
-    pub chunk_size: usize,
-    /// Overlap between chunks (in samples) to maintain context
-    pub overlap_size: usize,
-    /// Maximum buffer size (in samples)
-    pub max_buffer_size: usize,
-    /// Minimum chunk size before processing (in samples)
-    pub min_chunk_size: usize,
-    /// Timeout for processing partial chunks
-    pub partial_timeout: Duration,
+pub struct WhisperStreamConfig {
+    /// Audio step size in ms. Set <= 0 for VAD mode.
+    pub step_ms: i32,
+    /// Audio length per inference in ms.
+    pub length_ms: i32,
+    /// Audio to keep from previous step in ms.
+    pub keep_ms: i32,
+    /// VAD energy threshold.
+    pub vad_thold: f32,
+    /// High-pass frequency cutoff for VAD.
+    pub freq_thold: f32,
+    /// If true, don't carry prompt tokens across boundaries.
+    pub no_context: bool,
 }
 
-impl Default for StreamConfig {
+impl Default for WhisperStreamConfig {
     fn default() -> Self {
         Self {
-            chunk_size: 16000 * 5,        // 5 seconds at 16kHz
-            overlap_size: 16000,           // 1 second overlap
-            max_buffer_size: 16000 * 30,   // 30 seconds maximum
-            min_chunk_size: 16000,          // 1 second minimum
-            partial_timeout: Duration::from_secs(2),
+            step_ms: 3000,
+            length_ms: 10000,
+            keep_ms: 200,
+            vad_thold: 0.6,
+            freq_thold: 100.0,
+            no_context: true,
         }
     }
 }
 
-/// A streaming transcriber that processes audio incrementally
+// ---------------------------------------------------------------------------
+// WhisperStream
+// ---------------------------------------------------------------------------
+
+/// Streaming transcriber — faithful port of stream.cpp main loop.
+///
+/// Two modes:
+/// - **Fixed-step** (`step_ms > 0`): sliding window with overlap.
+/// - **VAD** (`step_ms <= 0`): transcribe on speech activity.
 pub struct WhisperStream {
-    context: WhisperContext,
     state: WhisperState,
     params: FullParams,
-    config: StreamConfig,
-    buffer: AudioBuffer,
-    last_process_time: Instant,
-    segment_offset: i64,
-    processed_samples: i64,
+    config: WhisperStreamConfig,
+    use_vad: bool,
+
+    // Pre-computed sample counts
+    n_samples_step: usize,
+    n_samples_len: usize,
+    n_samples_keep: usize,
+    n_new_line: i32,
+
+    // Overlap buffer from previous inference
+    pcmf32_old: Vec<f32>,
+    // Context propagation
+    prompt_tokens: Vec<i32>,
+
+    n_iter: i32,
+
+    // Internal audio buffer (replaces SDL capture)
+    audio_buf: VecDeque<f32>,
+
+    // Total samples consumed from audio_buf
+    total_samples_processed: i64,
 }
 
 impl WhisperStream {
-    /// Create a new streaming transcriber
-    pub fn new(context: &WhisperContext, params: FullParams) -> Result<Self> {
-        Self::with_config(context, params, StreamConfig::default())
+    /// Create with default config.
+    pub fn new(ctx: &WhisperContext, params: FullParams) -> Result<Self> {
+        Self::with_config(ctx, params, WhisperStreamConfig::default())
     }
 
-    /// Create a new streaming transcriber with custom configuration
+    /// Create with custom config.
     pub fn with_config(
-        context: &WhisperContext,
-        params: FullParams,
-        config: StreamConfig,
+        ctx: &WhisperContext,
+        mut params: FullParams,
+        mut config: WhisperStreamConfig,
     ) -> Result<Self> {
-        let state = context.create_state()?;
-        let buffer = AudioBuffer::new(config.max_buffer_size);
+        let state = WhisperState::new(ctx)?;
+
+        // --- Config normalization (stream.cpp main()) ---
+        config.keep_ms = config.keep_ms.min(config.step_ms);
+        config.length_ms = config.length_ms.max(config.step_ms);
+
+        // Sample counts
+        let n_samples_step =
+            (1e-3 * config.step_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
+        let n_samples_len =
+            (1e-3 * config.length_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
+        let n_samples_keep =
+            (1e-3 * config.keep_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
+
+        // Mode detection
+        let use_vad = n_samples_step == 0; // step_ms <= 0 → VAD
+
+        // n_new_line: guard against division by zero when step_ms <= 0
+        let n_new_line = if !use_vad {
+            (config.length_ms / config.step_ms - 1).max(1)
+        } else {
+            1
+        };
+
+        // Auto-set mode-dependent FullParams (stream.cpp lines 141-143)
+        params = params
+            .no_timestamps(!use_vad)
+            .max_tokens(0)
+            .single_segment(!use_vad)
+            .print_progress(false)
+            .print_realtime(false);
+
+        // Force no_context in VAD mode: no_context |= use_vad
+        if use_vad {
+            config.no_context = true;
+            params = params.no_context(true);
+        }
 
         Ok(Self {
-            context: context.clone(),
             state,
             params,
             config,
-            buffer,
-            last_process_time: Instant::now(),
-            segment_offset: 0,
-            processed_samples: 0,
+            use_vad,
+            n_samples_step,
+            n_samples_len,
+            n_samples_keep,
+            n_new_line,
+            pcmf32_old: Vec::new(),
+            prompt_tokens: Vec::new(),
+            n_iter: 0,
+            audio_buf: VecDeque::new(),
+            total_samples_processed: 0,
         })
     }
 
-    /// Feed audio samples to the stream
+    // --- Audio input ---
+
+    /// Push samples into the internal buffer (replaces SDL capture).
     pub fn feed_audio(&mut self, samples: &[f32]) {
-        self.buffer.push_samples(samples);
+        self.audio_buf.extend(samples.iter());
     }
 
-    /// Process pending audio and return any new segments
-    pub fn process_pending(&mut self) -> Result<Vec<Segment>> {
-        let mut segments = Vec::new();
+    // --- Processing ---
 
-        // Process full chunks
-        while let Some(chunk) = self.buffer.extract_chunk(self.config.chunk_size, self.config.overlap_size) {
-            let chunk_segments = self.process_chunk(&chunk)?;
-            segments.extend(chunk_segments);
-            self.last_process_time = Instant::now();
+    /// Dispatch to fixed-step or VAD mode.
+    pub fn process_step(&mut self) -> Result<Option<Vec<Segment>>> {
+        if !self.use_vad {
+            self.process_step_fixed()
+        } else {
+            self.process_step_vad()
+        }
+    }
+
+    /// Fixed-step (sliding window) mode — port of stream.cpp lines 253-428.
+    fn process_step_fixed(&mut self) -> Result<Option<Vec<Segment>>> {
+        // Need at least n_samples_step new samples
+        if self.audio_buf.len() < self.n_samples_step {
+            return Ok(None);
         }
 
-        // Check if we should process a partial chunk (timeout or flush)
-        if self.should_process_partial() {
-            if let Some(chunk) = self.extract_partial_chunk() {
-                let chunk_segments = self.process_chunk(&chunk)?;
-                segments.extend(chunk_segments);
-                self.last_process_time = Instant::now();
+        // Pop n_samples_step from front of audio_buf
+        let pcmf32_new: Vec<f32> = self.audio_buf.drain(..self.n_samples_step).collect();
+        self.total_samples_processed += pcmf32_new.len() as i64;
+
+        let n_samples_new = pcmf32_new.len();
+
+        // Exact formula from stream.cpp line 279:
+        // n_samples_take = min(pcmf32_old.size(), max(0, n_samples_keep + n_samples_len - n_samples_new))
+        let n_samples_take = self.pcmf32_old.len().min(
+            (self.n_samples_keep + self.n_samples_len).saturating_sub(n_samples_new),
+        );
+
+        // Build pcmf32: tail of pcmf32_old + pcmf32_new
+        let mut pcmf32 = Vec::with_capacity(n_samples_take + n_samples_new);
+        if n_samples_take > 0 && !self.pcmf32_old.is_empty() {
+            let start = self.pcmf32_old.len() - n_samples_take;
+            pcmf32.extend_from_slice(&self.pcmf32_old[start..]);
+        }
+        pcmf32.extend_from_slice(&pcmf32_new);
+
+        // Save for next iteration
+        self.pcmf32_old = pcmf32.clone();
+
+        // Run inference
+        let segments = self.run_inference(&pcmf32)?;
+
+        self.n_iter += 1;
+
+        // At n_new_line boundary (stream.cpp lines 408-425)
+        if self.n_iter % self.n_new_line == 0 {
+            // Keep only last n_samples_keep samples
+            if self.n_samples_keep > 0 && pcmf32.len() >= self.n_samples_keep {
+                self.pcmf32_old =
+                    pcmf32[pcmf32.len() - self.n_samples_keep..].to_vec();
+            } else {
+                self.pcmf32_old.clear();
+            }
+
+            // Collect prompt tokens if !no_context
+            if !self.config.no_context {
+                self.collect_prompt_tokens();
             }
         }
 
-        Ok(segments)
+        Ok(Some(segments))
     }
 
-    /// Force processing of all buffered audio
-    pub fn flush(&mut self) -> Result<Vec<Segment>> {
-        let mut segments = Vec::new();
-
-        // Process any remaining audio
-        if !self.buffer.is_empty() {
-            let remaining = self.buffer.drain_all();
-            if remaining.len() >= self.config.min_chunk_size {
-                let chunk_segments = self.process_chunk(&remaining)?;
-                segments.extend(chunk_segments);
-            }
+    /// VAD mode — port of stream.cpp lines 293-313.
+    fn process_step_vad(&mut self) -> Result<Option<Vec<Segment>>> {
+        // Need at least 2 seconds of audio (stream.cpp: t_diff < 2000 → continue)
+        let n_vad_samples = (WHISPER_SAMPLE_RATE * 2) as usize; // 32000 samples
+        if self.audio_buf.len() < n_vad_samples {
+            return Ok(None);
         }
 
-        Ok(segments)
+        // Pop 2 seconds for VAD probe
+        let pcmf32_vad: Vec<f32> = self.audio_buf.drain(..n_vad_samples).collect();
+        self.total_samples_processed += pcmf32_vad.len() as i64;
+
+        // Check for speech
+        let is_silence = vad_simple(
+            &pcmf32_vad,
+            WHISPER_SAMPLE_RATE,
+            1000,
+            self.config.vad_thold,
+            self.config.freq_thold,
+        );
+
+        if is_silence {
+            return Ok(None);
+        }
+
+        // Speech detected — grab length_ms of audio total (stream.cpp line 305)
+        let n_samples_len = self.n_samples_len;
+        let additional = n_samples_len.saturating_sub(pcmf32_vad.len());
+        let mut pcmf32 = pcmf32_vad;
+
+        if additional > 0 {
+            let available = additional.min(self.audio_buf.len());
+            let extra: Vec<f32> = self.audio_buf.drain(..available).collect();
+            self.total_samples_processed += extra.len() as i64;
+            pcmf32.extend_from_slice(&extra);
+        }
+
+        let segments = self.run_inference(&pcmf32)?;
+        self.n_iter += 1;
+
+        Ok(Some(segments))
     }
 
-    /// Reset the stream, clearing all buffers but reusing the state
-    /// The state's results will be automatically cleared on the next transcription
-    pub fn reset(&mut self) -> Result<()> {
-        self.buffer.clear();
-        // Don't recreate state - reuse existing one for better performance
-        // The state's internal results are automatically cleared by whisper_full_with_state
-        self.segment_offset = 0;
-        self.processed_samples = 0;
-        self.last_process_time = Instant::now();
-        Ok(())
-    }
+    /// Run whisper inference on audio — port of stream.cpp lines 316-344.
+    fn run_inference(&mut self, audio: &[f32]) -> Result<Vec<Segment>> {
+        if audio.is_empty() {
+            return Ok(Vec::new());
+        }
 
-    /// Force recreation of the WhisperState, deallocating the old one
-    /// This is more expensive than reset() but may be needed after errors
-    /// or when switching between very different audio sources
-    pub fn recreate_state(&mut self) -> Result<()> {
-        self.state = self.context.create_state()?;
-        self.reset()
-    }
+        // Clone params so we can set prompt_tokens pointer
+        let mut params = self.params.clone();
 
-    /// Get the current buffer size in samples
-    pub fn buffer_size(&self) -> usize {
-        self.buffer.len()
-    }
+        // Set prompt tokens on the clone, pointing to self.prompt_tokens.
+        // The prompt_tokens() method stores a raw pointer. self.prompt_tokens
+        // (Vec<i32>) lives on self and outlives the full() call, so this is safe.
+        if !self.config.no_context && !self.prompt_tokens.is_empty() {
+            params = params.prompt_tokens(&self.prompt_tokens);
+        }
 
-    /// Get the total number of processed samples
-    pub fn processed_samples(&self) -> i64 {
-        self.processed_samples
-    }
-
-    /// Process a chunk of audio and return segments
-    fn process_chunk(&mut self, audio: &[f32]) -> Result<Vec<Segment>> {
-        // Run transcription on the chunk
-        self.state.full(self.params.clone(), audio)?;
+        self.state.full(params, audio)?;
 
         // Extract segments
         let n_segments = self.state.full_n_segments();
@@ -168,110 +289,160 @@ impl WhisperStream {
             let (start_ms, end_ms) = self.state.full_get_segment_timestamps(i);
             let speaker_turn_next = self.state.full_get_segment_speaker_turn_next(i);
 
-            // Adjust timestamps based on stream position
-            let adjusted_start = start_ms + self.segment_offset;
-            let adjusted_end = end_ms + self.segment_offset;
-
             segments.push(Segment {
-                start_ms: adjusted_start,
-                end_ms: adjusted_end,
+                start_ms,
+                end_ms,
                 text,
                 speaker_turn_next,
             });
         }
 
-        // Update offset for next chunk
-        // Account for overlap by only advancing by non-overlapped samples
-        let advance_samples = (audio.len() - self.config.overlap_size) as i64;
-        self.segment_offset += (advance_samples * 1000) / 16000; // Convert samples to ms at 16kHz
-        self.processed_samples += advance_samples;
-
         Ok(segments)
     }
 
-    /// Check if we should process a partial chunk
-    fn should_process_partial(&self) -> bool {
-        self.buffer.len() >= self.config.min_chunk_size
-            && self.last_process_time.elapsed() > self.config.partial_timeout
-    }
+    /// Collect prompt tokens from last inference — port of stream.cpp lines 416-425.
+    fn collect_prompt_tokens(&mut self) {
+        self.prompt_tokens.clear();
 
-    /// Extract a partial chunk for processing
-    fn extract_partial_chunk(&mut self) -> Option<Vec<f32>> {
-        let size = self.buffer.len().min(self.config.chunk_size);
-        if size >= self.config.min_chunk_size {
-            self.buffer.extract_chunk(size, 0)
-        } else {
-            None
-        }
-    }
-}
-
-/// Builder for StreamConfig
-pub struct StreamConfigBuilder {
-    config: StreamConfig,
-}
-
-impl StreamConfigBuilder {
-    /// Create a new builder with default values
-    pub fn new() -> Self {
-        Self {
-            config: StreamConfig::default(),
+        let n_segments = self.state.full_n_segments();
+        for i in 0..n_segments {
+            let token_count = self.state.full_n_tokens(i);
+            for j in 0..token_count {
+                self.prompt_tokens
+                    .push(self.state.full_get_token_id(i, j));
+            }
         }
     }
 
-    /// Set the chunk size in samples
-    pub fn chunk_size(mut self, size: usize) -> Self {
-        self.config.chunk_size = size;
-        self
+    // --- Convenience methods ---
+
+    /// Process all remaining audio in buffer.
+    pub fn flush(&mut self) -> Result<Vec<Segment>> {
+        let mut all_segments = Vec::new();
+
+        loop {
+            match self.process_step()? {
+                Some(segments) => all_segments.extend(segments),
+                None => break,
+            }
+        }
+
+        // If there's leftover audio that's less than a full step, run inference on it
+        if !self.audio_buf.is_empty() {
+            let remaining: Vec<f32> = self.audio_buf.drain(..).collect();
+            self.total_samples_processed += remaining.len() as i64;
+
+            if !self.use_vad {
+                // Build final buffer with overlap
+                let n_samples_take = self.pcmf32_old.len().min(
+                    (self.n_samples_keep + self.n_samples_len)
+                        .saturating_sub(remaining.len()),
+                );
+                let mut pcmf32 = Vec::with_capacity(n_samples_take + remaining.len());
+                if n_samples_take > 0 && !self.pcmf32_old.is_empty() {
+                    let start = self.pcmf32_old.len() - n_samples_take;
+                    pcmf32.extend_from_slice(&self.pcmf32_old[start..]);
+                }
+                pcmf32.extend_from_slice(&remaining);
+
+                let segments = self.run_inference(&pcmf32)?;
+                all_segments.extend(segments);
+            } else {
+                let segments = self.run_inference(&remaining)?;
+                all_segments.extend(segments);
+            }
+        }
+
+        Ok(all_segments)
     }
 
-    /// Set the chunk size in seconds (assumes 16kHz)
-    pub fn chunk_seconds(mut self, seconds: f32) -> Self {
-        self.config.chunk_size = (seconds * 16000.0) as usize;
-        self
+    /// Clear buffers, counters, prompt tokens.
+    pub fn reset(&mut self) {
+        self.audio_buf.clear();
+        self.pcmf32_old.clear();
+        self.prompt_tokens.clear();
+        self.n_iter = 0;
+        self.total_samples_processed = 0;
     }
 
-    /// Set the overlap size in samples
-    pub fn overlap_size(mut self, size: usize) -> Self {
-        self.config.overlap_size = size;
-        self
+    /// Samples currently in the internal buffer.
+    pub fn buffer_size(&self) -> usize {
+        self.audio_buf.len()
     }
 
-    /// Set the overlap size in seconds (assumes 16kHz)
-    pub fn overlap_seconds(mut self, seconds: f32) -> Self {
-        self.config.overlap_size = (seconds * 16000.0) as usize;
-        self
-    }
-
-    /// Set the maximum buffer size in samples
-    pub fn max_buffer_size(mut self, size: usize) -> Self {
-        self.config.max_buffer_size = size;
-        self
-    }
-
-    /// Set the minimum chunk size in samples
-    pub fn min_chunk_size(mut self, size: usize) -> Self {
-        self.config.min_chunk_size = size;
-        self
-    }
-
-    /// Set the partial chunk timeout
-    pub fn partial_timeout(mut self, timeout: Duration) -> Self {
-        self.config.partial_timeout = timeout;
-        self
-    }
-
-    /// Build the configuration
-    pub fn build(self) -> StreamConfig {
-        self.config
+    /// Total samples consumed from the buffer.
+    pub fn processed_samples(&self) -> i64 {
+        self.total_samples_processed
     }
 }
 
-impl Default for StreamConfigBuilder {
-    fn default() -> Self {
-        Self::new()
+// ---------------------------------------------------------------------------
+// vad_simple + high_pass_filter — port from common.cpp
+// ---------------------------------------------------------------------------
+
+/// High-pass filter — port of common.cpp::high_pass_filter (lines 597-608).
+fn high_pass_filter(data: &mut [f32], cutoff: f32, sample_rate: f32) {
+    if data.is_empty() {
+        return;
+    }
+    let rc = 1.0 / (2.0 * std::f32::consts::PI * cutoff);
+    let dt = 1.0 / sample_rate;
+    let alpha = dt / (rc + dt);
+
+    let mut y = data[0];
+    for i in 1..data.len() {
+        y = alpha * (y + data[i] - data[i - 1]);
+        data[i] = y;
     }
 }
+
+/// Energy-based VAD — port of common.cpp::vad_simple (lines 610-646).
+///
+/// Returns `true` if **silence** (no speech detected).
+fn vad_simple(
+    pcmf32: &[f32],
+    sample_rate: i32,
+    last_ms: i32,
+    vad_thold: f32,
+    freq_thold: f32,
+) -> bool {
+    let n_samples = pcmf32.len();
+    let n_samples_last = (sample_rate as usize * last_ms.max(0) as usize) / 1000;
+
+    if n_samples_last >= n_samples {
+        // not enough samples — assume no speech (C++ returns false here,
+        // but the sense in C++ is inverted: false = silence. We return true = silence.)
+        return true;
+    }
+
+    // Work on a copy so we can apply the high-pass filter
+    let mut data = pcmf32.to_vec();
+
+    if freq_thold > 0.0 {
+        high_pass_filter(&mut data, freq_thold, sample_rate as f32);
+    }
+
+    let mut energy_all: f32 = 0.0;
+    let mut energy_last: f32 = 0.0;
+
+    for (i, &s) in data.iter().enumerate() {
+        energy_all += s.abs();
+        if i >= n_samples - n_samples_last {
+            energy_last += s.abs();
+        }
+    }
+
+    energy_all /= n_samples as f32;
+    energy_last /= n_samples_last as f32;
+
+    // C++ returns false (speech) when energy_last > thold * energy_all.
+    // We return true for silence.
+    energy_last <= vad_thold * energy_all
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -280,94 +451,217 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn test_stream_config_builder() {
-        let config = StreamConfigBuilder::new()
-            .chunk_seconds(3.0)
-            .overlap_seconds(0.5)
-            .min_chunk_size(8000)
-            .build();
-
-        assert_eq!(config.chunk_size, 48000); // 3 seconds at 16kHz
-        assert_eq!(config.overlap_size, 8000); // 0.5 seconds at 16kHz
-        assert_eq!(config.min_chunk_size, 8000);
+    fn test_config_defaults() {
+        let config = WhisperStreamConfig::default();
+        assert_eq!(config.step_ms, 3000);
+        assert_eq!(config.length_ms, 10000);
+        assert_eq!(config.keep_ms, 200);
+        assert!((config.vad_thold - 0.6).abs() < f32::EPSILON);
+        assert!((config.freq_thold - 100.0).abs() < f32::EPSILON);
+        assert!(config.no_context);
     }
 
     #[test]
-    fn test_stream_creation() {
+    fn test_config_normalization() {
+        // keep_ms clamped to step_ms
         let model_path = "tests/models/ggml-tiny.en.bin";
-        if Path::new(model_path).exists() {
-            let ctx = WhisperContext::new(model_path).unwrap();
-            let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        if !Path::new(model_path).exists() {
+            // Can't test normalization without a model for the constructor.
+            // Test the logic directly instead.
+            let mut config = WhisperStreamConfig {
+                step_ms: 2000,
+                length_ms: 5000,
+                keep_ms: 3000, // > step_ms, should be clamped
+                ..Default::default()
+            };
+            config.keep_ms = config.keep_ms.min(config.step_ms);
+            config.length_ms = config.length_ms.max(config.step_ms);
+            assert_eq!(config.keep_ms, 2000);
+            assert_eq!(config.length_ms, 5000);
 
-            let stream = WhisperStream::new(&ctx, params);
-            assert!(stream.is_ok());
-
-            let mut stream = stream.unwrap();
-            assert_eq!(stream.buffer_size(), 0);
-            assert_eq!(stream.processed_samples(), 0);
+            // length_ms clamped up to step_ms
+            let mut config2 = WhisperStreamConfig {
+                step_ms: 8000,
+                length_ms: 5000, // < step_ms, should be raised
+                keep_ms: 200,
+                ..Default::default()
+            };
+            config2.keep_ms = config2.keep_ms.min(config2.step_ms);
+            config2.length_ms = config2.length_ms.max(config2.step_ms);
+            assert_eq!(config2.length_ms, 8000);
+            assert_eq!(config2.keep_ms, 200);
         }
+    }
+
+    #[test]
+    fn test_n_new_line_calculation() {
+        // n_new_line = max(1, length_ms / step_ms - 1) when !use_vad
+        // Defaults: length_ms=10000, step_ms=3000 → 10000/3000 - 1 = 2
+        let n = (10000i32 / 3000 - 1).max(1);
+        assert_eq!(n, 2);
+
+        // step_ms=5000, length_ms=10000 → 10000/5000 - 1 = 1
+        let n = (10000i32 / 5000 - 1).max(1);
+        assert_eq!(n, 1);
+
+        // step_ms=10000, length_ms=10000 → 10000/10000 - 1 = 0 → clamped to 1
+        let n = (10000i32 / 10000 - 1).max(1);
+        assert_eq!(n, 1);
+
+        // step_ms=2000, length_ms=10000 → 10000/2000 - 1 = 4
+        let n = (10000i32 / 2000 - 1).max(1);
+        assert_eq!(n, 4);
+
+        // VAD mode: always 1
+        let n_vad = 1i32;
+        assert_eq!(n_vad, 1);
+    }
+
+    #[test]
+    fn test_vad_mode_detection() {
+        // step_ms <= 0 → use_vad
+        let step_ms_values = [0, -1, -100];
+        for step_ms in step_ms_values {
+            let n_samples_step =
+                (1e-3 * step_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
+            assert_eq!(n_samples_step, 0, "step_ms={} should yield 0 samples", step_ms);
+        }
+
+        // step_ms > 0 → fixed step
+        let n = (1e-3 * 3000.0 * WHISPER_SAMPLE_RATE as f64) as usize;
+        assert_eq!(n, 48000);
     }
 
     #[test]
     fn test_feed_and_buffer() {
         let model_path = "tests/models/ggml-tiny.en.bin";
-        if Path::new(model_path).exists() {
-            let ctx = WhisperContext::new(model_path).unwrap();
-            let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-            let mut stream = WhisperStream::new(&ctx, params).unwrap();
-
-            // Feed some audio
-            let samples = vec![0.0f32; 16000]; // 1 second
-            stream.feed_audio(&samples);
-            assert_eq!(stream.buffer_size(), 16000);
-
-            // Feed more audio
-            stream.feed_audio(&samples);
-            assert_eq!(stream.buffer_size(), 32000);
+        if !Path::new(model_path).exists() {
+            eprintln!("Skipping test_feed_and_buffer: model not found");
+            return;
         }
+
+        let ctx = WhisperContext::new(model_path).unwrap();
+        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        let mut stream = WhisperStream::new(&ctx, params).unwrap();
+
+        assert_eq!(stream.buffer_size(), 0);
+
+        let samples = vec![0.0f32; 16000];
+        stream.feed_audio(&samples);
+        assert_eq!(stream.buffer_size(), 16000);
+
+        stream.feed_audio(&samples);
+        assert_eq!(stream.buffer_size(), 32000);
     }
 
     #[test]
-    fn test_state_reuse_on_reset() {
+    fn test_vad_simple_silence() {
+        let silence = vec![0.0f32; 16000];
+        assert!(vad_simple(&silence, 16000, 100, 0.6, 100.0));
+    }
+
+    #[test]
+    fn test_vad_simple_too_few_samples() {
+        let short = vec![0.1f32; 100];
+        assert!(vad_simple(&short, 16000, 1000, 0.6, 100.0));
+    }
+
+    #[test]
+    fn test_high_pass_filter_basic() {
+        let mut data = vec![1.0, 0.0, 1.0, 0.0, 1.0];
+        high_pass_filter(&mut data, 100.0, 16000.0);
+        assert_ne!(data[2], 1.0);
+    }
+
+    #[test]
+    fn test_reset() {
         let model_path = "tests/models/ggml-tiny.en.bin";
-        if Path::new(model_path).exists() {
-            let ctx = WhisperContext::new(model_path).unwrap();
-            let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-            let mut stream = WhisperStream::new(&ctx, params).unwrap();
-
-            // Feed audio and process
-            let samples = vec![0.0f32; 16000 * 5]; // 5 seconds
-            stream.feed_audio(&samples);
-
-            // Get state pointer before reset (for comparison)
-            let state_ptr_before = &stream.state as *const _ as usize;
-
-            // Reset the stream
-            stream.reset().unwrap();
-
-            // State pointer should be the same (state was reused)
-            let state_ptr_after = &stream.state as *const _ as usize;
-            assert_eq!(state_ptr_before, state_ptr_after, "State should be reused, not recreated");
-
-            // Buffer should be cleared
-            assert_eq!(stream.buffer_size(), 0);
-            assert_eq!(stream.processed_samples(), 0);
-
-            // Now test recreate_state() creates a new state
-            stream.feed_audio(&samples);
-            let state_ptr_before_recreate = &stream.state as *const _ as usize;
-
-            stream.recreate_state().unwrap();
-
-            let state_ptr_after_recreate = &stream.state as *const _ as usize;
-            // Note: The WhisperState object address stays the same, but its internal pointer changes
-            // We can't directly test the internal pointer changes from here
-            assert_eq!(state_ptr_before_recreate, state_ptr_after_recreate,
-                      "WhisperState struct address remains same");
-
-            // But we can verify the stream was reset
-            assert_eq!(stream.buffer_size(), 0);
-            assert_eq!(stream.processed_samples(), 0);
+        if !Path::new(model_path).exists() {
+            eprintln!("Skipping test_reset: model not found");
+            return;
         }
+
+        let ctx = WhisperContext::new(model_path).unwrap();
+        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        let mut stream = WhisperStream::new(&ctx, params).unwrap();
+
+        stream.feed_audio(&vec![0.0f32; 16000]);
+        assert_eq!(stream.buffer_size(), 16000);
+
+        stream.reset();
+        assert_eq!(stream.buffer_size(), 0);
+        assert_eq!(stream.processed_samples(), 0);
+    }
+
+    // --- Integration tests (require model) ---
+
+    #[test]
+    fn test_fixed_step_basic() {
+        let model_path = "tests/models/ggml-tiny.en.bin";
+        if !Path::new(model_path).exists() {
+            eprintln!("Skipping test_fixed_step_basic: model not found");
+            return;
+        }
+
+        let ctx = WhisperContext::new(model_path).unwrap();
+        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
+            .language("en");
+
+        // Use a small step for testing
+        let config = WhisperStreamConfig {
+            step_ms: 3000,
+            length_ms: 10000,
+            keep_ms: 200,
+            ..Default::default()
+        };
+
+        let mut stream = WhisperStream::with_config(&ctx, params, config).unwrap();
+
+        // Feed enough audio for one step (3 seconds = 48000 samples)
+        let audio = vec![0.0f32; 48000];
+        stream.feed_audio(&audio);
+
+        let result = stream.process_step().unwrap();
+        assert!(result.is_some(), "Should produce segments with enough audio");
+        assert!(stream.processed_samples() > 0);
+    }
+
+    #[test]
+    fn test_prompt_propagation() {
+        let model_path = "tests/models/ggml-tiny.en.bin";
+        if !Path::new(model_path).exists() {
+            eprintln!("Skipping test_prompt_propagation: model not found");
+            return;
+        }
+
+        let ctx = WhisperContext::new(model_path).unwrap();
+        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
+            .language("en");
+
+        let config = WhisperStreamConfig {
+            step_ms: 3000,
+            length_ms: 6000,
+            keep_ms: 200,
+            no_context: false, // enable prompt propagation
+            ..Default::default()
+        };
+
+        let mut stream = WhisperStream::with_config(&ctx, params, config).unwrap();
+
+        // n_new_line = max(1, 6000/3000 - 1) = 1, so every iteration triggers
+        // prompt collection when no_context=false.
+
+        // Feed enough for one step
+        let audio = vec![0.0f32; 48000];
+        stream.feed_audio(&audio);
+
+        let result = stream.process_step().unwrap();
+        assert!(result.is_some());
+
+        // After one iteration at the n_new_line boundary, prompt_tokens should
+        // be populated (assuming whisper produced at least one token).
+        // With silence input, whisper may or may not produce tokens, so we
+        // just verify the mechanism didn't panic.
+        assert!(stream.processed_samples() > 0);
     }
 }

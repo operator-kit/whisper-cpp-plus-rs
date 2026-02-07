@@ -47,7 +47,6 @@
 //! # }
 //! ```
 
-mod buffer;
 mod context;
 mod error;
 mod params;
@@ -61,8 +60,9 @@ pub mod enhanced;
 #[cfg(feature = "quantization")]
 mod quantize;
 
-#[cfg(feature = "async")]
-mod async_api;
+// TODO: rewrite async API for new WhisperStream
+// #[cfg(feature = "async")]
+// mod async_api;
 
 pub use context::WhisperContext;
 pub use error::{Result, WhisperError};
@@ -70,7 +70,7 @@ pub use params::{
     FullParams, SamplingStrategy, TranscriptionParams, TranscriptionParamsBuilder,
 };
 pub use state::{Segment, TranscriptionResult, WhisperState};
-pub use stream::{StreamConfig, StreamConfigBuilder, WhisperStream};
+pub use stream::{WhisperStream, WhisperStreamConfig};
 pub use stream_pcm::{
     PcmFormat, PcmReader, PcmReaderConfig, WhisperStreamPcm, WhisperStreamPcmConfig, vad_simple,
 };
@@ -86,8 +86,9 @@ pub mod bench_helpers {
     pub use crate::vad::{WhisperVadProcessor, VadParams};
 }
 
-#[cfg(feature = "async")]
-pub use async_api::{AsyncWhisperStream, SharedAsyncStream};
+// TODO: rewrite async API for new WhisperStream
+// #[cfg(feature = "async")]
+// pub use async_api::{AsyncWhisperStream, SharedAsyncStream};
 
 // Re-export the sys crate for advanced users who need lower-level access
 pub use whisper_cpp_plus_sys;
