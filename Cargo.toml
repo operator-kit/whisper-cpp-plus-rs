@@ -1,5 +1,5 @@
 [workspace]
-members = ["whisper-cpp-plus-sys", "whisper-cpp-plus", "whisper-quantize", "xtask"]
+members = ["whisper-cpp-plus-sys", "whisper-cpp-plus", "xtask"]
 resolver = "2"
 
 [workspace.package]

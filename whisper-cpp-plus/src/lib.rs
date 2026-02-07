@@ -58,6 +58,9 @@ mod vad;
 
 pub mod enhanced;
 
+#[cfg(feature = "quantization")]
+mod quantize;
+
 #[cfg(feature = "async")]
 mod async_api;
 
@@ -74,6 +77,8 @@ pub use stream_pcm::{
 pub use vad::{
     VadContextParams, VadParams, VadParamsBuilder, WhisperVadProcessor, VadSegments,
 };
+#[cfg(feature = "quantization")]
+pub use quantize::{ModelQuantizer, QuantizationType, QuantizeError};
 
 // Re-export for benchmarks
 #[doc(hidden)]

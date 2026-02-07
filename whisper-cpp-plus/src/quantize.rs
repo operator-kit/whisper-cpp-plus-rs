@@ -1,14 +1,21 @@
-//! Model quantization functionality for reducing model size and improving inference speed.
+//! Model quantization for reducing model size and improving inference speed.
 //!
-//! This module provides functionality to quantize Whisper models to various bit depths,
-//! reducing model size while maintaining reasonable accuracy. Quantization is particularly
-//! useful for deployment on resource-constrained devices.
+//! Provides functionality to quantize Whisper models to various bit depths,
+//! reducing model size while maintaining reasonable accuracy. Quantization is
+//! particularly useful for deployment on resource-constrained devices.
+//!
+//! Enable with the `quantization` feature flag:
+//! ```toml
+//! whisper-cpp-plus = { version = "0.1.0", features = ["quantization"] }
+//! ```
 
 use std::ffi::CString;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 use thiserror::Error;
+
+use whisper_cpp_plus_sys as ffi;
 
 /// Error type for quantization operations
 #[derive(Debug, Error)]
@@ -40,34 +47,34 @@ type Result<T> = std::result::Result<T, QuantizeError>;
 #[allow(non_camel_case_types)]
 pub enum QuantizationType {
     /// 4-bit quantization (method 0) - ~3.5 GB for base model
-    Q4_0 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q4_0,
+    Q4_0 = ffi::GGML_FTYPE_MOSTLY_Q4_0,
 
     /// 4-bit quantization (method 1) - ~3.9 GB for base model
-    Q4_1 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q4_1,
+    Q4_1 = ffi::GGML_FTYPE_MOSTLY_Q4_1,
 
     /// 5-bit quantization (method 0) - ~4.3 GB for base model
-    Q5_0 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q5_0,
+    Q5_0 = ffi::GGML_FTYPE_MOSTLY_Q5_0,
 
     /// 5-bit quantization (method 1) - ~4.7 GB for base model
-    Q5_1 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q5_1,
+    Q5_1 = ffi::GGML_FTYPE_MOSTLY_Q5_1,
 
     /// 8-bit quantization - ~7.7 GB for base model
-    Q8_0 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q8_0,
+    Q8_0 = ffi::GGML_FTYPE_MOSTLY_Q8_0,
 
     /// 2-bit k-quantization
-    Q2_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q2_K,
+    Q2_K = ffi::GGML_FTYPE_MOSTLY_Q2_K,
 
     /// 3-bit k-quantization
-    Q3_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q3_K,
+    Q3_K = ffi::GGML_FTYPE_MOSTLY_Q3_K,
 
     /// 4-bit k-quantization
-    Q4_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q4_K,
+    Q4_K = ffi::GGML_FTYPE_MOSTLY_Q4_K,
 
     /// 5-bit k-quantization
-    Q5_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q5_K,
+    Q5_K = ffi::GGML_FTYPE_MOSTLY_Q5_K,
 
     /// 6-bit k-quantization
-    Q6_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q6_K,
+    Q6_K = ffi::GGML_FTYPE_MOSTLY_Q6_K,
 }
 
 impl QuantizationType {
@@ -87,8 +94,8 @@ impl QuantizationType {
         }
     }
 
-    /// Estimate the size reduction factor for this quantization type
-    /// Returns the approximate size as a fraction of the original F32 model
+    /// Estimate the size reduction factor for this quantization type.
+    /// Returns the approximate size as a fraction of the original F32 model.
     pub fn size_factor(&self) -> f32 {
         match self {
             Self::Q2_K => 0.19,  // ~19% of original
@@ -240,7 +247,7 @@ impl ModelQuantizer {
         });
 
         // Create the FFI callback function
-        let ffi_callback: whisper_cpp_plus_sys::whisper_quantize_progress_callback = if callback_ptr.is_some() {
+        let ffi_callback: ffi::whisper_quantize_progress_callback = if callback_ptr.is_some() {
             Some(quantize_progress_callback)
         } else {
             None
@@ -255,7 +262,7 @@ impl ModelQuantizer {
 
         // Perform quantization
         let result = unsafe {
-            whisper_cpp_plus_sys::whisper_model_quantize(
+            ffi::whisper_model_quantize(
                 input_cstr.as_ptr(),
                 output_cstr.as_ptr(),
                 qtype as i32,
@@ -270,29 +277,29 @@ impl ModelQuantizer {
 
         // Check result
         match result {
-            whisper_cpp_plus_sys::WHISPER_QUANTIZE_OK => Ok(()),
-            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_INVALID_MODEL => {
+            ffi::WHISPER_QUANTIZE_OK => Ok(()),
+            ffi::WHISPER_QUANTIZE_ERROR_INVALID_MODEL => {
                 Err(QuantizeError::QuantizationFailed("Invalid model file".to_string()))
             }
-            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_FILE_OPEN => {
+            ffi::WHISPER_QUANTIZE_ERROR_FILE_OPEN => {
                 Err(QuantizeError::QuantizationFailed(format!(
                     "Failed to open input file: {}",
                     input_path.display()
                 )))
             }
-            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_FILE_WRITE => {
+            ffi::WHISPER_QUANTIZE_ERROR_FILE_WRITE => {
                 Err(QuantizeError::QuantizationFailed(format!(
                     "Failed to write output file: {}",
                     output_path.display()
                 )))
             }
-            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_INVALID_FTYPE => {
+            ffi::WHISPER_QUANTIZE_ERROR_INVALID_FTYPE => {
                 Err(QuantizeError::QuantizationFailed(format!(
                     "Invalid quantization type: {}",
                     qtype
                 )))
             }
-            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_QUANTIZATION_FAILED => {
+            ffi::WHISPER_QUANTIZE_ERROR_QUANTIZATION_FAILED => {
                 Err(QuantizeError::QuantizationFailed("Quantization failed".to_string()))
             }
             _ => Err(QuantizeError::QuantizationFailed(format!(
@@ -303,9 +310,6 @@ impl ModelQuantizer {
     }
 
     /// Get the quantization type of an existing model file
-    ///
-    /// # Arguments
-    /// * `model_path` - Path to the model file
     ///
     /// # Returns
     /// * `Ok(Some(qtype))` - The quantization type if the model is quantized
@@ -337,7 +341,7 @@ impl ModelQuantizer {
         let path_cstr = path_to_cstring(path)?;
 
         let ftype = unsafe {
-            whisper_cpp_plus_sys::whisper_model_get_ftype(path_cstr.as_ptr())
+            ffi::whisper_model_get_ftype(path_cstr.as_ptr())
         };
 
         if ftype < 0 {
@@ -349,8 +353,8 @@ impl ModelQuantizer {
 
         // Map the ftype to our QuantizationType enum
         let qtype = match ftype {
-            x if x == whisper_cpp_plus_sys::GGML_FTYPE_ALL_F32 => None,
-            x if x == whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_F16 => None,
+            x if x == ffi::GGML_FTYPE_ALL_F32 => None,
+            x if x == ffi::GGML_FTYPE_MOSTLY_F16 => None,
             x if x == QuantizationType::Q4_0 as i32 => Some(QuantizationType::Q4_0),
             x if x == QuantizationType::Q4_1 as i32 => Some(QuantizationType::Q4_1),
             x if x == QuantizationType::Q5_0 as i32 => Some(QuantizationType::Q5_0),
@@ -369,10 +373,6 @@ impl ModelQuantizer {
 
     /// Estimate the size of a quantized model given the original model path and target quantization type
     ///
-    /// # Arguments
-    /// * `model_path` - Path to the original model file
-    /// * `qtype` - The target quantization type
-    ///
     /// # Returns
     /// Estimated size in bytes of the quantized model
     ///
@@ -380,15 +380,11 @@ impl ModelQuantizer {
     /// ```no_run
     /// use whisper_cpp_plus::{ModelQuantizer, QuantizationType};
     ///
-    /// let original_size = std::fs::metadata("models/ggml-base.bin")
-    ///     .map(|m| m.len())
-    ///     .unwrap_or(0);
     /// let estimated_size = ModelQuantizer::estimate_quantized_size(
     ///     "models/ggml-base.bin",
     ///     QuantizationType::Q5_0
     /// ).unwrap_or(0);
     ///
-    /// println!("Original: {} MB", original_size / 1024 / 1024);
     /// println!("Estimated after Q5_0: {} MB", estimated_size / 1024 / 1024);
     /// ```
     pub fn estimate_quantized_size<P: AsRef<Path>>(
@@ -455,7 +451,6 @@ mod tests {
 
     #[test]
     fn test_size_factors() {
-        // All quantization types should have reasonable size factors
         for qtype in QuantizationType::all() {
             let factor = qtype.size_factor();
             assert!(factor > 0.0 && factor < 1.0,

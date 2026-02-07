@@ -27,7 +27,8 @@ criterion = "0.5"
 rand = "0.8"
 
 [features]
-default = []
+default = ["quantization"]
+quantization = ["whisper-cpp-plus-sys/quantization"]
 cuda = ["whisper-cpp-plus-sys/cuda"]
 metal = ["whisper-cpp-plus-sys/metal"]
 openblas = ["whisper-cpp-plus-sys/openblas"]

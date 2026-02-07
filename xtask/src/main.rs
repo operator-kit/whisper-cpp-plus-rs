@@ -330,8 +330,11 @@ fn test_setup(force: bool) -> Result<()> {
                 .context(format!("Failed to run {}", cmd_script))?
         } else {
             let script_path = models_dir.join(sh_script);
+            let script_str = script_path.to_string_lossy().to_string();
+            let arg_str = arg.to_string();
+            let models_str = models_dir.to_string_lossy().to_string();
             std::process::Command::new("bash")
-                .args([&script_path.to_string_lossy().to_string(), arg.to_string(), models_dir.to_string_lossy().to_string()])
+                .args([&script_str, &arg_str, &models_str])
                 .status()
                 .context(format!("Failed to run {}", sh_script))?
         };
@@ -369,23 +372,20 @@ fn detect_target() -> Option<String> {
 }
 
 fn detect_host() -> Option<String> {
-    #[cfg(all(target_os = "windows", target_arch = "x86_64", target_env = "msvc"))]
-    return Some("x86_64-pc-windows-msvc".to_string());
-
-    #[cfg(all(target_os = "windows", target_arch = "x86_64", target_env = "gnu"))]
-    return Some("x86_64-pc-windows-gnu".to_string());
-
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    return Some("x86_64-unknown-linux-gnu".to_string());
-
-    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    return Some("x86_64-apple-darwin".to_string());
-
-    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    return Some("aarch64-apple-darwin".to_string());
-
-    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-    return Some("aarch64-unknown-linux-gnu".to_string());
-
-    None
+    let target = if cfg!(all(target_os = "windows", target_arch = "x86_64", target_env = "msvc")) {
+        "x86_64-pc-windows-msvc"
+    } else if cfg!(all(target_os = "windows", target_arch = "x86_64", target_env = "gnu")) {
+        "x86_64-pc-windows-gnu"
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        "x86_64-unknown-linux-gnu"
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        "x86_64-apple-darwin"
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        "aarch64-apple-darwin"
+    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        "aarch64-unknown-linux-gnu"
+    } else {
+        return None;
+    };
+    Some(target.to_string())
 }

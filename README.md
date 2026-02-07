@@ -32,6 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **Temperature fallback** — quality-based retry with multiple temperatures
 - **Async** — `tokio::spawn_blocking` wrappers (feature = `async`)
 - **Cross-platform** — Windows (MSVC), Linux, macOS (Intel & Apple Silicon)
+- **Quantization** — model compression via `ModelQuantizer` (feature = `quantization`)
 - **Hardware acceleration** — SIMD auto-detected, GPU via feature flags
 
 ## Installation
@@ -52,9 +53,10 @@ hound = "3.5"  # WAV file loading
 ### Feature Flags
 
 ```toml
-whisper-cpp-plus = { version = "0.1.0", features = ["async"] }   # Async API
-whisper-cpp-plus = { version = "0.1.0", features = ["cuda"] }    # NVIDIA GPU
-whisper-cpp-plus = { version = "0.1.0", features = ["metal"] }   # macOS GPU
+whisper-cpp-plus = { version = "0.1.0", features = ["quantization"] }  # Model quantization
+whisper-cpp-plus = { version = "0.1.0", features = ["async"] }         # Async API
+whisper-cpp-plus = { version = "0.1.0", features = ["cuda"] }          # NVIDIA GPU
+whisper-cpp-plus = { version = "0.1.0", features = ["metal"] }         # macOS GPU
 ```
 
 ## Crate Structure
@@ -63,6 +65,8 @@ whisper-cpp-plus = { version = "0.1.0", features = ["metal"] }   # macOS GPU
 |-------|-------------|
 | `whisper-cpp-plus` | High-level safe Rust bindings |
 | `whisper-cpp-plus-sys` | Low-level FFI bindings |
+
+Model quantization available via `features = ["quantization"]`.
 
 ## API Overview
 
@@ -74,6 +78,12 @@ whisper-cpp-plus = { version = "0.1.0", features = ["metal"] }   # macOS GPU
 | `WhisperState` | Transcription state (`Send` only) | `whisper_state*` |
 | `FullParams` | Transcription parameters | `whisper_full_params` |
 | `TranscriptionResult` | Text + timestamped segments | — |
+| `WhisperStream` | Chunked real-time streaming | — |
+| `WhisperStreamPcm` | Streaming from raw PCM input | `stream-pcm.cpp` |
+| `WhisperVadProcessor` | Silero voice activity detection | `whisper_vad_*` |
+| `EnhancedWhisperVadProcessor` | VAD + segment aggregation | — |
+| `EnhancedWhisperState` | Transcription with temperature fallback | — |
+| `ModelQuantizer` | Model quantization (feature) | `quantize.cpp` |
 
 ### Examples
 
@@ -173,6 +183,28 @@ let result = ctx.transcribe_with_params_enhanced(&audio, params)?;
 
 More examples in [`whisper-cpp-plus/examples/`](./whisper-cpp-plus/examples/).
 
+## Enhanced Features
+
+Beyond standard whisper.cpp bindings, this crate provides optimizations inspired by [faster-whisper](https://github.com/SYSTRAN/faster-whisper):
+
+### Intelligent VAD Preprocessing
+
+`EnhancedWhisperVadProcessor` aggregates Silero VAD speech segments into optimal-sized chunks for transcription. Instead of transcribing hundreds of tiny segments, it merges adjacent speech into configurable windows — **2-3x faster** on audio with significant silence.
+
+### Temperature Fallback
+
+`EnhancedWhisperState` automatically retries transcription at higher temperatures when quality thresholds aren't met (compression ratio, log probability, no-speech probability). Handles noisy/difficult audio without manual intervention.
+
+Both features are orthogonal — use one, both, or neither. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design details.
+
+## Design Principles
+
+- **Safety** — all unsafe FFI encapsulated with null checks, lifetime enforcement, RAII cleanup
+- **Zero-copy** — audio slices passed directly to C++ via pointer, no intermediate copies
+- **Progressive enhancement** — `Enhanced*` types opt-in; base API stays clean
+- **Idiomatic Rust** — builder patterns, `thiserror`, correct `Send`/`Sync` bounds
+- **Cross-platform** — Windows (MSVC), Linux, macOS; SIMD auto-detected, GPU via feature flags
+
 ## Models
 
 ### Downloading
@@ -229,6 +261,7 @@ cargo test --test real_audio              # JFK audio transcription
 cargo test --test enhanced_integration    # Enhanced VAD + fallback
 cargo test --test stream_pcm_integration  # WhisperStreamPcm modes
 cargo test --test vad_integration         # Silero VAD
+cargo test --test quantization --features quantization  # Model quantization
 ```
 
 ### Benchmarks
@@ -261,7 +294,7 @@ cargo xtask clean             # Remove cached libraries
 cargo xtask test-setup        # Download test models
 ```
 
-See [CACHING_GUIDE.md](CACHING_GUIDE.md) for details.
+See [docs/CACHING_GUIDE.md](docs/CACHING_GUIDE.md) for details.
 
 ## Safety
 
