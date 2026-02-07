@@ -2,7 +2,7 @@
 
 ## Crate structure
 
-Dual-crate architecture: `whisper-sys` (raw FFI bindings) + `whisper-cpp-rs` (safe idiomatic API). Sys crate stays stable while the high-level API evolves.
+Dual-crate architecture: `whisper-cpp-plus-sys` (raw FFI bindings) + `whisper-cpp-plus` (safe idiomatic API). Sys crate stays stable while the high-level API evolves.
 
 ## Context / state separation
 
@@ -20,7 +20,7 @@ All enhancements live under `src/enhanced/` and follow these rules:
 ### Naming
 - Types: `Enhanced` prefix (`EnhancedWhisperVadProcessor`, `EnhancedWhisperState`)
 - Methods: `_enhanced` suffix (`transcribe_with_params_enhanced`)
-- Module: `whisper_cpp_rs::enhanced::{vad, fallback}`
+- Module: `whisper_cpp_plus::enhanced::{vad, fallback}`
 
 ### Separation of concerns
 - **VAD** = preprocessing (before transcription) — `enhanced::vad`
@@ -37,7 +37,7 @@ Enhanced modules access FFI via `pub(crate)` fields (e.g., `WhisperState.ptr`). 
 ## Module layout
 
 ```
-whisper-cpp-rs/src/
+whisper-cpp-plus/src/
 ├── lib.rs              # Public API, convenience methods on WhisperContext
 ├── context.rs          # WhisperContext (Arc<ContextPtr>)
 ├── state.rs            # WhisperState (ptr + Arc<ContextPtr>)

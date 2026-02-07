@@ -1,5 +1,5 @@
 [workspace]
-members = ["whisper-sys", "whisper-cpp-rs", "whisper-quantize", "xtask"]
+members = ["whisper-cpp-plus-sys", "whisper-cpp-plus", "whisper-quantize", "xtask"]
 resolver = "2"
 
 [workspace.package]
@@ -8,7 +8,7 @@ edition = "2021"
 rust-version = "1.70.0"
 authors = ["Ross Morse"]
 license = "MIT"
-repository = "https://github.com/Code-Amp/whisper-cpp-rs"
+repository = "https://github.com/Code-Amp/whisper-cpp-plus"
 keywords = ["whisper", "speech", "transcription", "asr", "speech-to-text"]
 categories = ["multimedia::audio", "api-bindings", "science::robotics"]
 

@@ -1,6 +1,6 @@
 # xtask
 
-Build automation tasks for the whisper-cpp-rs workspace.
+Build automation tasks for the whisper-cpp-plus workspace.
 
 ## Running
 

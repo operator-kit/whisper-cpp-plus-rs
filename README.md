@@ -1,15 +1,15 @@
-# whisper-cpp-rs
+# whisper-cpp-plus
 
 Safe, idiomatic Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — OpenAI's Whisper speech recognition model.
 
-[![Crates.io](https://img.shields.io/crates/v/whisper-cpp-rs.svg)](https://crates.io/crates/whisper-cpp-rs)
-[![Documentation](https://docs.rs/whisper-cpp-rs/badge.svg)](https://docs.rs/whisper-cpp-rs)
+[![Crates.io](https://img.shields.io/crates/v/whisper-cpp-plus.svg)](https://crates.io/crates/whisper-cpp-plus)
+[![Documentation](https://docs.rs/whisper-cpp-plus/badge.svg)](https://docs.rs/whisper-cpp-plus)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Quick Start
 
 ```rust
-use whisper_cpp_rs::WhisperContext;
+use whisper_cpp_plus::WhisperContext;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = WhisperContext::new("models/ggml-base.en.bin")?;
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-whisper-cpp-rs = "0.1.0"
+whisper-cpp-plus = "0.1.0"
 
 # Optional
 hound = "3.5"  # WAV file loading
@@ -52,17 +52,17 @@ hound = "3.5"  # WAV file loading
 ### Feature Flags
 
 ```toml
-whisper-cpp-rs = { version = "0.1.0", features = ["async"] }   # Async API
-whisper-cpp-rs = { version = "0.1.0", features = ["cuda"] }    # NVIDIA GPU
-whisper-cpp-rs = { version = "0.1.0", features = ["metal"] }   # macOS GPU
+whisper-cpp-plus = { version = "0.1.0", features = ["async"] }   # Async API
+whisper-cpp-plus = { version = "0.1.0", features = ["cuda"] }    # NVIDIA GPU
+whisper-cpp-plus = { version = "0.1.0", features = ["metal"] }   # macOS GPU
 ```
 
 ## Crate Structure
 
 | Crate | Description |
 |-------|-------------|
-| `whisper-cpp-rs` | High-level safe Rust bindings |
-| `whisper-sys` | Low-level FFI bindings |
+| `whisper-cpp-plus` | High-level safe Rust bindings |
+| `whisper-cpp-plus-sys` | Low-level FFI bindings |
 
 ## API Overview
 
@@ -80,7 +80,7 @@ whisper-cpp-rs = { version = "0.1.0", features = ["metal"] }   # macOS GPU
 **Transcription with parameters:**
 
 ```rust
-use whisper_cpp_rs::{WhisperContext, TranscriptionParams};
+use whisper_cpp_plus::{WhisperContext, TranscriptionParams};
 
 let ctx = WhisperContext::new("model.bin")?;
 let params = TranscriptionParams::builder()
@@ -113,7 +113,7 @@ let handles: Vec<_> = files.iter().map(|file| {
 **Streaming:**
 
 ```rust
-use whisper_cpp_rs::{WhisperStream, FullParams, SamplingStrategy};
+use whisper_cpp_plus::{WhisperStream, FullParams, SamplingStrategy};
 
 let ctx = WhisperContext::new("model.bin")?;
 let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
@@ -132,7 +132,7 @@ loop {
 **VAD preprocessing:**
 
 ```rust
-use whisper_cpp_rs::{WhisperVadProcessor, VadParams};
+use whisper_cpp_plus::{WhisperVadProcessor, VadParams};
 
 let mut vad = WhisperVadProcessor::new("models/ggml-silero-vad.bin")?;
 let params = VadParams::default();
@@ -149,7 +149,7 @@ for (start, end) in segments.get_all_segments() {
 **Enhanced VAD with segment aggregation:**
 
 ```rust
-use whisper_cpp_rs::enhanced::{EnhancedWhisperVadProcessor, EnhancedVadParams};
+use whisper_cpp_plus::enhanced::{EnhancedWhisperVadProcessor, EnhancedVadParams};
 
 let mut vad = EnhancedWhisperVadProcessor::new("models/ggml-silero-vad.bin")?;
 let params = EnhancedVadParams::default();
@@ -171,7 +171,7 @@ let result = ctx.transcribe_with_params_enhanced(&audio, params)?;
 // Automatically retries with higher temperatures if quality thresholds aren't met
 ```
 
-More examples in [`whisper-cpp-rs/examples/`](./whisper-cpp-rs/examples/).
+More examples in [`whisper-cpp-plus/examples/`](./whisper-cpp-plus/examples/).
 
 ## Models
 
@@ -211,10 +211,10 @@ curl -L -o models/ggml-base.en.bin \
 cargo xtask test-setup
 
 # Run all tests
-cargo test -p whisper-cpp-rs
+cargo test -p whisper-cpp-plus
 
 # With async tests
-cargo test -p whisper-cpp-rs --features async
+cargo test -p whisper-cpp-plus --features async
 ```
 
 Tests that require models skip gracefully if not downloaded.
@@ -286,8 +286,8 @@ All unsafe FFI operations encapsulated with null pointer checks, lifetime enforc
 ## Development
 
 ```bash
-git clone --recursive https://github.com/Code-Amp/whisper-cpp-rs
-cd whisper-cpp-rs
+git clone --recursive https://github.com/Code-Amp/whisper-cpp-plus
+cd whisper-cpp-plus
 cargo xtask test-setup
 cargo test
 ```
@@ -305,5 +305,5 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions and module
 
 ## Support
 
-- [API Documentation](https://docs.rs/whisper-cpp-rs)
-- [Issue Tracker](https://github.com/Code-Amp/whisper-cpp-rs/issues)
+- [API Documentation](https://docs.rs/whisper-cpp-plus)
+- [Issue Tracker](https://github.com/Code-Amp/whisper-cpp-plus/issues)

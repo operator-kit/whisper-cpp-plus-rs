@@ -24,7 +24,7 @@ cargo xtask prebuild
 cargo xtask info
 ```
 
-The prebuilt library is stored at `prebuilt/{target}/{profile}/` and automatically detected by `whisper-sys/build.rs` on subsequent builds.
+The prebuilt library is stored at `prebuilt/{target}/{profile}/` and automatically detected by `whisper-cpp-plus-sys/build.rs` on subsequent builds.
 
 ### Using the Prebuilt Library
 
@@ -87,7 +87,7 @@ Downloads `ggml-tiny.en.bin` and `ggml-silero-v6.2.0.bin` into `vendor/whisper.c
 ### How It Works
 
 1. `cargo xtask prebuild` compiles whisper.cpp via the `cc` crate and stores the static library in `prebuilt/`
-2. `whisper-sys/build.rs` checks for prebuilt libraries before compiling:
+2. `whisper-cpp-plus-sys/build.rs` checks for prebuilt libraries before compiling:
    - First checks `WHISPER_PREBUILT_PATH` env var
    - Then checks `prebuilt/{target}/{profile}/` relative to project root
    - On Unix, also checks system paths (`/usr/local/lib`, `/usr/lib`, `/opt/homebrew/lib`)
@@ -107,7 +107,7 @@ If both projects are yours, combine them into a workspace to share build artifac
 
 ```toml
 [workspace]
-members = ["whisper-cpp-rs", "your-project"]
+members = ["whisper-cpp-plus", "your-project"]
 resolver = "2"
 ```
 

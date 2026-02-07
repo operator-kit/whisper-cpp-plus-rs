@@ -1,6 +1,6 @@
 # whisper-quantize
 
-Model quantization utilities for [whisper-cpp-rs](https://github.com/Code-Amp/whisper-cpp-rs). Reduces Whisper model sizes by 50-75% through quantization for deployment on resource-constrained devices.
+Model quantization utilities for [whisper-cpp-plus](https://github.com/Code-Amp/whisper-cpp-plus). Reduces Whisper model sizes by 50-75% through quantization for deployment on resource-constrained devices.
 
 ## Usage
 

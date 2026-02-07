@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to whisper-cpp-rs will be documented in this file.
+All notable changes to whisper-cpp-plus will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -33,4 +33,4 @@ The fix aligns our implementation with whisper.cpp's approach where `whisper_ful
 
 ## [0.1.0] - Previous Release
 
-Initial release of whisper-cpp-rs with full Rust bindings to whisper.cpp.
+Initial release of whisper-cpp-plus with full Rust bindings to whisper.cpp.

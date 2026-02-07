@@ -1,0 +1,82 @@
+[package]
+name = "whisper-cpp-plus"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Safe, idiomatic Rust bindings for whisper.cpp"
+readme = "README.md"
+
+[dependencies]
+whisper-cpp-plus-sys = { path = "../whisper-cpp-plus-sys", version = "0.1.0" }
+thiserror = { workspace = true }
+num_cpus = { workspace = true }
+flate2 = "1.0"
+
+# Optional dependencies
+tokio = { version = "1.35", features = ["full"], optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.35", features = ["full"] }
+hound = "3.5"
+criterion = "0.5"
+rand = "0.8"
+
+[features]
+default = []
+cuda = ["whisper-cpp-plus-sys/cuda"]
+metal = ["whisper-cpp-plus-sys/metal"]
+openblas = ["whisper-cpp-plus-sys/openblas"]
+async = ["tokio"]
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "minimal"
+path = "examples/minimal.rs"
+
+[[example]]
+name = "streaming"
+path = "examples/streaming.rs"
+
+[[example]]
+name = "streaming_reuse_demo"
+path = "examples/streaming_reuse_demo.rs"
+
+[[example]]
+name = "compare_vad"
+path = "examples/compare_vad.rs"
+
+[[example]]
+name = "enhanced_vad"
+path = "examples/enhanced_vad.rs"
+
+[[example]]
+name = "async_transcribe"
+path = "examples/async_transcribe.rs"
+required-features = ["async"]
+
+[[example]]
+name = "temperature_fallback"
+path = "examples/temperature_fallback.rs"
+
+[[bench]]
+name = "transcription"
+harness = false
+
+[[bench]]
+name = "enhanced_vad_bench"
+harness = false
+
+[[bench]]
+name = "enhanced_fallback_bench"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true

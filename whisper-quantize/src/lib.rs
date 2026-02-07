@@ -40,34 +40,34 @@ type Result<T> = std::result::Result<T, QuantizeError>;
 #[allow(non_camel_case_types)]
 pub enum QuantizationType {
     /// 4-bit quantization (method 0) - ~3.5 GB for base model
-    Q4_0 = whisper_sys::GGML_FTYPE_MOSTLY_Q4_0,
+    Q4_0 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q4_0,
 
     /// 4-bit quantization (method 1) - ~3.9 GB for base model
-    Q4_1 = whisper_sys::GGML_FTYPE_MOSTLY_Q4_1,
+    Q4_1 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q4_1,
 
     /// 5-bit quantization (method 0) - ~4.3 GB for base model
-    Q5_0 = whisper_sys::GGML_FTYPE_MOSTLY_Q5_0,
+    Q5_0 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q5_0,
 
     /// 5-bit quantization (method 1) - ~4.7 GB for base model
-    Q5_1 = whisper_sys::GGML_FTYPE_MOSTLY_Q5_1,
+    Q5_1 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q5_1,
 
     /// 8-bit quantization - ~7.7 GB for base model
-    Q8_0 = whisper_sys::GGML_FTYPE_MOSTLY_Q8_0,
+    Q8_0 = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q8_0,
 
     /// 2-bit k-quantization
-    Q2_K = whisper_sys::GGML_FTYPE_MOSTLY_Q2_K,
+    Q2_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q2_K,
 
     /// 3-bit k-quantization
-    Q3_K = whisper_sys::GGML_FTYPE_MOSTLY_Q3_K,
+    Q3_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q3_K,
 
     /// 4-bit k-quantization
-    Q4_K = whisper_sys::GGML_FTYPE_MOSTLY_Q4_K,
+    Q4_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q4_K,
 
     /// 5-bit k-quantization
-    Q5_K = whisper_sys::GGML_FTYPE_MOSTLY_Q5_K,
+    Q5_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q5_K,
 
     /// 6-bit k-quantization
-    Q6_K = whisper_sys::GGML_FTYPE_MOSTLY_Q6_K,
+    Q6_K = whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_Q6_K,
 }
 
 impl QuantizationType {
@@ -160,7 +160,7 @@ impl ModelQuantizer {
     ///
     /// # Example
     /// ```no_run
-    /// use whisper_cpp_rs::{ModelQuantizer, QuantizationType};
+    /// use whisper_cpp_plus::{ModelQuantizer, QuantizationType};
     ///
     /// ModelQuantizer::quantize_model_file(
     ///     "models/ggml-base.bin",
@@ -186,7 +186,7 @@ impl ModelQuantizer {
     ///
     /// # Example
     /// ```no_run
-    /// use whisper_cpp_rs::{ModelQuantizer, QuantizationType};
+    /// use whisper_cpp_plus::{ModelQuantizer, QuantizationType};
     ///
     /// ModelQuantizer::quantize_model_file_with_progress(
     ///     "models/ggml-base.bin",
@@ -240,7 +240,7 @@ impl ModelQuantizer {
         });
 
         // Create the FFI callback function
-        let ffi_callback: whisper_sys::whisper_quantize_progress_callback = if callback_ptr.is_some() {
+        let ffi_callback: whisper_cpp_plus_sys::whisper_quantize_progress_callback = if callback_ptr.is_some() {
             Some(quantize_progress_callback)
         } else {
             None
@@ -255,7 +255,7 @@ impl ModelQuantizer {
 
         // Perform quantization
         let result = unsafe {
-            whisper_sys::whisper_model_quantize(
+            whisper_cpp_plus_sys::whisper_model_quantize(
                 input_cstr.as_ptr(),
                 output_cstr.as_ptr(),
                 qtype as i32,
@@ -270,29 +270,29 @@ impl ModelQuantizer {
 
         // Check result
         match result {
-            whisper_sys::WHISPER_QUANTIZE_OK => Ok(()),
-            whisper_sys::WHISPER_QUANTIZE_ERROR_INVALID_MODEL => {
+            whisper_cpp_plus_sys::WHISPER_QUANTIZE_OK => Ok(()),
+            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_INVALID_MODEL => {
                 Err(QuantizeError::QuantizationFailed("Invalid model file".to_string()))
             }
-            whisper_sys::WHISPER_QUANTIZE_ERROR_FILE_OPEN => {
+            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_FILE_OPEN => {
                 Err(QuantizeError::QuantizationFailed(format!(
                     "Failed to open input file: {}",
                     input_path.display()
                 )))
             }
-            whisper_sys::WHISPER_QUANTIZE_ERROR_FILE_WRITE => {
+            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_FILE_WRITE => {
                 Err(QuantizeError::QuantizationFailed(format!(
                     "Failed to write output file: {}",
                     output_path.display()
                 )))
             }
-            whisper_sys::WHISPER_QUANTIZE_ERROR_INVALID_FTYPE => {
+            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_INVALID_FTYPE => {
                 Err(QuantizeError::QuantizationFailed(format!(
                     "Invalid quantization type: {}",
                     qtype
                 )))
             }
-            whisper_sys::WHISPER_QUANTIZE_ERROR_QUANTIZATION_FAILED => {
+            whisper_cpp_plus_sys::WHISPER_QUANTIZE_ERROR_QUANTIZATION_FAILED => {
                 Err(QuantizeError::QuantizationFailed("Quantization failed".to_string()))
             }
             _ => Err(QuantizeError::QuantizationFailed(format!(
@@ -314,7 +314,7 @@ impl ModelQuantizer {
     ///
     /// # Example
     /// ```no_run
-    /// use whisper_cpp_rs::ModelQuantizer;
+    /// use whisper_cpp_plus::ModelQuantizer;
     ///
     /// match ModelQuantizer::get_model_quantization_type("models/ggml-base-q5_0.bin") {
     ///     Ok(Some(qtype)) => println!("Model is quantized as: {}", qtype),
@@ -337,7 +337,7 @@ impl ModelQuantizer {
         let path_cstr = path_to_cstring(path)?;
 
         let ftype = unsafe {
-            whisper_sys::whisper_model_get_ftype(path_cstr.as_ptr())
+            whisper_cpp_plus_sys::whisper_model_get_ftype(path_cstr.as_ptr())
         };
 
         if ftype < 0 {
@@ -349,8 +349,8 @@ impl ModelQuantizer {
 
         // Map the ftype to our QuantizationType enum
         let qtype = match ftype {
-            x if x == whisper_sys::GGML_FTYPE_ALL_F32 => None,
-            x if x == whisper_sys::GGML_FTYPE_MOSTLY_F16 => None,
+            x if x == whisper_cpp_plus_sys::GGML_FTYPE_ALL_F32 => None,
+            x if x == whisper_cpp_plus_sys::GGML_FTYPE_MOSTLY_F16 => None,
             x if x == QuantizationType::Q4_0 as i32 => Some(QuantizationType::Q4_0),
             x if x == QuantizationType::Q4_1 as i32 => Some(QuantizationType::Q4_1),
             x if x == QuantizationType::Q5_0 as i32 => Some(QuantizationType::Q5_0),
@@ -378,7 +378,7 @@ impl ModelQuantizer {
     ///
     /// # Example
     /// ```no_run
-    /// use whisper_cpp_rs::{ModelQuantizer, QuantizationType};
+    /// use whisper_cpp_plus::{ModelQuantizer, QuantizationType};
     ///
     /// let original_size = std::fs::metadata("models/ggml-base.bin")
     ///     .map(|m| m.len())
