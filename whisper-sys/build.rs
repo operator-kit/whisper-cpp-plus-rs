@@ -5,7 +5,6 @@ fn main() {
     // Tell cargo to rerun if the build script changes
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=../vendor/whisper.cpp");
-    println!("cargo:rerun-if-changed=src/backend_stubs.cpp");
 
     // Get output directory
     let out_dir = env::var("OUT_DIR").unwrap();

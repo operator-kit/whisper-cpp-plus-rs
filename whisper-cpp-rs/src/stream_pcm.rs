@@ -6,7 +6,7 @@ use crate::context::WhisperContext;
 use crate::error::{Result, WhisperError};
 use crate::params::FullParams;
 use crate::state::{Segment, WhisperState};
-use crate::vad::VadProcessor;
+use crate::vad::WhisperVadProcessor;
 
 use std::io::Read;
 use std::sync::{Arc, Mutex};
@@ -333,12 +333,12 @@ pub fn vad_simple(
 }
 
 // ---------------------------------------------------------------------------
-// StreamPcmConfig
+// WhisperStreamPcmConfig
 // ---------------------------------------------------------------------------
 
-/// Configuration for [`StreamPcm`] — maps to `whisper_params` streaming subset.
+/// Configuration for [`WhisperStreamPcm`] — maps to `whisper_params` streaming subset.
 #[derive(Debug, Clone)]
-pub struct StreamPcmConfig {
+pub struct WhisperStreamPcmConfig {
     /// Fixed-step chunk size in ms (non-VAD mode).
     pub step_ms: i32,
     /// Max audio length per inference in ms.
@@ -359,7 +359,7 @@ pub struct StreamPcmConfig {
     pub vad_pre_roll_ms: i32,
 }
 
-impl Default for StreamPcmConfig {
+impl Default for WhisperStreamPcmConfig {
     fn default() -> Self {
         Self {
             step_ms: 3000,
@@ -376,7 +376,7 @@ impl Default for StreamPcmConfig {
 }
 
 // ---------------------------------------------------------------------------
-// StreamPcm — main processor
+// WhisperStreamPcm — main processor
 // ---------------------------------------------------------------------------
 
 /// Streaming PCM transcriber — direct port of `stream-pcm.cpp` main loop.
@@ -384,12 +384,12 @@ impl Default for StreamPcmConfig {
 /// Two modes:
 /// - **Fixed-step** (`use_vad = false`): process `step_ms` chunks with overlap.
 /// - **VAD-driven** (`use_vad = true`): accumulate speech, transcribe on silence.
-pub struct StreamPcm {
+pub struct WhisperStreamPcm {
     state: WhisperState,
     params: FullParams,
-    config: StreamPcmConfig,
+    config: WhisperStreamPcmConfig,
     reader: PcmReader,
-    vad: Option<VadProcessor>,
+    vad: Option<WhisperVadProcessor>,
 
     // Pre-computed sample counts
     n_samples_step: usize,
@@ -415,24 +415,24 @@ pub struct StreamPcm {
     vad_max_segment_samples: usize,
 }
 
-impl StreamPcm {
-    /// Create a new StreamPcm processor (simple VAD or no VAD).
+impl WhisperStreamPcm {
+    /// Create a new WhisperStreamPcm processor (simple VAD or no VAD).
     pub fn new(
         ctx: &WhisperContext,
         params: FullParams,
-        mut config: StreamPcmConfig,
+        mut config: WhisperStreamPcmConfig,
         reader: PcmReader,
     ) -> Result<Self> {
         Self::build(ctx, params, &mut config, reader, None)
     }
 
-    /// Create a new StreamPcm processor with Silero VAD.
+    /// Create a new WhisperStreamPcm processor with Silero VAD.
     pub fn with_vad(
         ctx: &WhisperContext,
         params: FullParams,
-        mut config: StreamPcmConfig,
+        mut config: WhisperStreamPcmConfig,
         reader: PcmReader,
-        vad: VadProcessor,
+        vad: WhisperVadProcessor,
     ) -> Result<Self> {
         Self::build(ctx, params, &mut config, reader, Some(vad))
     }
@@ -440,9 +440,9 @@ impl StreamPcm {
     fn build(
         ctx: &WhisperContext,
         params: FullParams,
-        config: &mut StreamPcmConfig,
+        config: &mut WhisperStreamPcmConfig,
         reader: PcmReader,
-        vad: Option<VadProcessor>,
+        vad: Option<WhisperVadProcessor>,
     ) -> Result<Self> {
         let state = WhisperState::new(ctx)?;
 
@@ -863,7 +863,7 @@ mod tests {
 
     #[test]
     fn test_stream_pcm_config_defaults() {
-        let config = StreamPcmConfig::default();
+        let config = WhisperStreamPcmConfig::default();
         assert_eq!(config.step_ms, 3000);
         assert_eq!(config.length_ms, 10000);
         assert_eq!(config.keep_ms, 200);
@@ -884,13 +884,13 @@ mod tests {
         let params = FullParams::default();
         let cursor = std::io::Cursor::new(Vec::<u8>::new());
         let reader = PcmReader::new(Box::new(cursor), PcmReaderConfig::default());
-        let config = StreamPcmConfig {
+        let config = WhisperStreamPcmConfig {
             use_vad: true,
             keep_ms: 500, // should be forced to 0
             ..Default::default()
         };
 
-        let stream = StreamPcm::new(&ctx, params, config, reader).unwrap();
+        let stream = WhisperStreamPcm::new(&ctx, params, config, reader).unwrap();
         assert_eq!(stream.config.keep_ms, 0);
     }
 }

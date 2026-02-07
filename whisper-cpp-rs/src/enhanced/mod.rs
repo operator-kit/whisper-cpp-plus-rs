@@ -19,7 +19,7 @@
 pub mod vad;
 pub mod fallback;
 
-pub use vad::{EnhancedVadProcessor, EnhancedVadParams, EnhancedVadParamsBuilder, AudioChunk};
+pub use vad::{EnhancedWhisperVadProcessor, EnhancedVadParams, EnhancedVadParamsBuilder, AudioChunk};
 pub use fallback::{
     EnhancedTranscriptionParams, EnhancedTranscriptionParamsBuilder,
     QualityThresholds, EnhancedWhisperState, TranscriptionAttempt

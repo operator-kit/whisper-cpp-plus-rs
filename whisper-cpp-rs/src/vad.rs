@@ -89,14 +89,14 @@ impl VadContextParams {
 }
 
 /// Voice Activity Detector
-pub struct VadProcessor {
+pub struct WhisperVadProcessor {
     ctx: *mut ffi::whisper_vad_context,
 }
 
-unsafe impl Send for VadProcessor {}
-unsafe impl Sync for VadProcessor {}
+unsafe impl Send for WhisperVadProcessor {}
+unsafe impl Sync for WhisperVadProcessor {}
 
-impl Drop for VadProcessor {
+impl Drop for WhisperVadProcessor {
     fn drop(&mut self) {
         unsafe {
             if !self.ctx.is_null() {
@@ -106,7 +106,7 @@ impl Drop for VadProcessor {
     }
 }
 
-impl VadProcessor {
+impl WhisperVadProcessor {
     /// Create a new VAD processor from a model file
     pub fn new<P: AsRef<Path>>(model_path: P) -> Result<Self> {
         Self::new_with_params(model_path, VadContextParams::default())
@@ -386,7 +386,7 @@ mod tests {
         // This test will only run if a VAD model is available
         let model_path = "tests/models/ggml-silero-vad.bin";
         if Path::new(model_path).exists() {
-            let processor = VadProcessor::new(model_path);
+            let processor = WhisperVadProcessor::new(model_path);
             assert!(processor.is_ok());
         } else {
             eprintln!("Skipping VAD processor creation test: model not found");

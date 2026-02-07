@@ -1,8 +1,8 @@
 //! Compare standard VAD vs enhanced VAD with aggregation
 
 use std::path::Path;
-use whisper_cpp_rs::{VadProcessor, VadParams};
-use whisper_cpp_rs::enhanced::vad::{EnhancedVadProcessor, EnhancedVadParamsBuilder};
+use whisper_cpp_rs::{WhisperVadProcessor, VadParams};
+use whisper_cpp_rs::enhanced::vad::{EnhancedWhisperVadProcessor, EnhancedVadParamsBuilder};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Check for required files
@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run standard VAD
     println!("1. STANDARD VAD:");
     println!("{}", "-".repeat(50));
-    let mut standard_vad = VadProcessor::new(vad_model_path)?;
+    let mut standard_vad = WhisperVadProcessor::new(vad_model_path)?;
     let standard_params = VadParams::default();
 
     let start = std::time::Instant::now();
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run enhanced VAD with aggregation
     println!("\n2. ENHANCED VAD WITH AGGREGATION:");
     println!("{}", "-".repeat(50));
-    let mut enhanced_vad = EnhancedVadProcessor::new(vad_model_path)?;
+    let mut enhanced_vad = EnhancedWhisperVadProcessor::new(vad_model_path)?;
     let enhanced_params = EnhancedVadParamsBuilder::new()
         .max_segment_duration(30.0)
         .merge_segments(true)

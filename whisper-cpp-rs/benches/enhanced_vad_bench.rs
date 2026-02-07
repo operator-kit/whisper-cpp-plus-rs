@@ -1,8 +1,8 @@
 //! Benchmarks comparing standard VAD vs enhanced VAD with aggregation
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use whisper_cpp_rs::bench_helpers::{VadProcessor, VadParams};
-use whisper_cpp_rs::enhanced::vad::{EnhancedVadProcessor, EnhancedVadParamsBuilder};
+use whisper_cpp_rs::bench_helpers::{WhisperVadProcessor, VadParams};
+use whisper_cpp_rs::enhanced::vad::{EnhancedWhisperVadProcessor, EnhancedVadParamsBuilder};
 use std::time::Duration;
 
 fn load_jfk_audio() -> Vec<f32> {
@@ -139,7 +139,7 @@ fn benchmark_vad_processing(c: &mut Criterion) {
             BenchmarkId::new("standard", name),
             audio,
             |b, audio| {
-                let mut vad = VadProcessor::new(vad_model_path).unwrap();
+                let mut vad = WhisperVadProcessor::new(vad_model_path).unwrap();
                 let params = VadParams::default();
                 b.iter(|| {
                     let segments = vad.segments_from_samples(black_box(audio), &params).unwrap();
@@ -153,7 +153,7 @@ fn benchmark_vad_processing(c: &mut Criterion) {
             BenchmarkId::new("enhanced_aggregated", name),
             audio,
             |b, audio| {
-                let mut vad = EnhancedVadProcessor::new(vad_model_path).unwrap();
+                let mut vad = EnhancedWhisperVadProcessor::new(vad_model_path).unwrap();
                 let params = EnhancedVadParamsBuilder::new()
                     .max_segment_duration(30.0)
                     .merge_segments(true)
@@ -178,7 +178,7 @@ fn benchmark_segment_aggregation(c: &mut Criterion) {
         return;
     }
 
-    let processor = EnhancedVadProcessor::new(vad_model_path).unwrap();
+    let processor = EnhancedWhisperVadProcessor::new(vad_model_path).unwrap();
     let mut group = c.benchmark_group("segment_aggregation");
 
     // Create different segment patterns
@@ -268,7 +268,7 @@ fn benchmark_vad_efficiency_metrics(c: &mut Criterion) {
 
     // Measure VAD processing without sleep simulation
     group.bench_function("standard_vad_processing", |b| {
-        let mut vad = VadProcessor::new(vad_model_path).unwrap();
+        let mut vad = WhisperVadProcessor::new(vad_model_path).unwrap();
         let params = VadParams::default();
 
         b.iter(|| {
@@ -286,7 +286,7 @@ fn benchmark_vad_efficiency_metrics(c: &mut Criterion) {
 
     // Measure enhanced VAD with aggregation
     group.bench_function("enhanced_vad_processing", |b| {
-        let mut vad = EnhancedVadProcessor::new(vad_model_path).unwrap();
+        let mut vad = EnhancedWhisperVadProcessor::new(vad_model_path).unwrap();
         let params = EnhancedVadParamsBuilder::new()
             .max_segment_duration(30.0)
             .merge_segments(true)

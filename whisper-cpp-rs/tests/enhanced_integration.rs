@@ -1,7 +1,7 @@
 mod common;
 
 use common::TestModels;
-use whisper_cpp_rs::enhanced::vad::{EnhancedVadParams, EnhancedVadProcessor};
+use whisper_cpp_rs::enhanced::vad::{EnhancedVadParams, EnhancedWhisperVadProcessor};
 use whisper_cpp_rs::enhanced::fallback::{EnhancedTranscriptionParams, EnhancedWhisperState};
 use whisper_cpp_rs::{FullParams, SamplingStrategy, WhisperContext};
 
@@ -23,7 +23,7 @@ fn test_enhanced_vad_with_real_audio() {
         .map(|s| s.unwrap() as f32 / i16::MAX as f32)
         .collect();
 
-    let mut processor = EnhancedVadProcessor::new(&vad_model).unwrap();
+    let mut processor = EnhancedWhisperVadProcessor::new(&vad_model).unwrap();
     let params = EnhancedVadParams::default();
     let chunks = processor.process_with_aggregation(&samples, &params).unwrap();
 
@@ -55,7 +55,7 @@ fn test_enhanced_vad_aggregation_merges_segments() {
         .map(|s| s.unwrap() as f32 / i16::MAX as f32)
         .collect();
 
-    let mut processor = EnhancedVadProcessor::new(&vad_model).unwrap();
+    let mut processor = EnhancedWhisperVadProcessor::new(&vad_model).unwrap();
 
     // With merging enabled (default)
     let merged_params = EnhancedVadParams {

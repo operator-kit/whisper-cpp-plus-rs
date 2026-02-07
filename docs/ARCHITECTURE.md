@@ -18,7 +18,7 @@ Maps to whisper.cpp's thread safety model:
 All enhancements live under `src/enhanced/` and follow these rules:
 
 ### Naming
-- Types: `Enhanced` prefix (`EnhancedVadProcessor`, `EnhancedWhisperState`)
+- Types: `Enhanced` prefix (`EnhancedWhisperVadProcessor`, `EnhancedWhisperState`)
 - Methods: `_enhanced` suffix (`transcribe_with_params_enhanced`)
 - Module: `whisper_cpp_rs::enhanced::{vad, fallback}`
 
@@ -45,12 +45,12 @@ whisper-cpp-rs/src/
 ├── error.rs            # WhisperError enum (thiserror)
 ├── buffer.rs           # AudioBuffer (circular, for streaming)
 ├── stream.rs           # WhisperStream (chunk-based streaming)
-├── stream_pcm.rs       # StreamPcm (port of stream-pcm.cpp)
-├── vad.rs              # VadProcessor (Silero VAD via whisper.cpp)
+├── stream_pcm.rs       # WhisperStreamPcm (port of stream-pcm.cpp)
+├── vad.rs              # WhisperVadProcessor (Silero VAD via whisper.cpp)
 ├── async_api.rs        # spawn_blocking wrappers (feature = "async")
 └── enhanced/
     ├── mod.rs
-    ├── vad.rs           # EnhancedVadProcessor (segment aggregation)
+    ├── vad.rs           # EnhancedWhisperVadProcessor (segment aggregation)
     └── fallback.rs      # Temperature fallback with quality thresholds
 ```
 

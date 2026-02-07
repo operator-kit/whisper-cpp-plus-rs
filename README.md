@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Features
 
 - **Thread-safe** — `WhisperContext` is `Send + Sync`, share via `Arc`
-- **Streaming** — real-time transcription via `WhisperStream` and `StreamPcm`
+- **Streaming** — real-time transcription via `WhisperStream` and `WhisperStreamPcm`
 - **VAD** — Silero Voice Activity Detection integration
 - **Enhanced VAD** — segment aggregation for optimal transcription chunks
 - **Temperature fallback** — quality-based retry with multiple temperatures
@@ -132,9 +132,9 @@ loop {
 **VAD preprocessing:**
 
 ```rust
-use whisper_cpp_rs::{VadProcessor, VadParams};
+use whisper_cpp_rs::{WhisperVadProcessor, VadParams};
 
-let mut vad = VadProcessor::new("models/ggml-silero-vad.bin")?;
+let mut vad = WhisperVadProcessor::new("models/ggml-silero-vad.bin")?;
 let params = VadParams::default();
 let segments = vad.segments_from_samples(&audio, &params)?;
 
@@ -149,9 +149,9 @@ for (start, end) in segments.get_all_segments() {
 **Enhanced VAD with segment aggregation:**
 
 ```rust
-use whisper_cpp_rs::enhanced::{EnhancedVadProcessor, EnhancedVadParams};
+use whisper_cpp_rs::enhanced::{EnhancedWhisperVadProcessor, EnhancedVadParams};
 
-let mut vad = EnhancedVadProcessor::new("models/ggml-silero-vad.bin")?;
+let mut vad = EnhancedWhisperVadProcessor::new("models/ggml-silero-vad.bin")?;
 let params = EnhancedVadParams::default();
 let chunks = vad.process_with_aggregation(&audio, &params)?;
 
@@ -227,7 +227,7 @@ cargo test --test integration             # Core integration (10 tests)
 cargo test --test type_safety             # Send/Sync verification (11 tests)
 cargo test --test real_audio              # JFK audio transcription
 cargo test --test enhanced_integration    # Enhanced VAD + fallback
-cargo test --test stream_pcm_integration  # StreamPcm modes
+cargo test --test stream_pcm_integration  # WhisperStreamPcm modes
 cargo test --test vad_integration         # Silero VAD
 ```
 

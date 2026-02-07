@@ -4,7 +4,7 @@
 //! inspired by faster-whisper's optimizations. VAD is a preprocessing step that happens
 //! BEFORE transcription, not part of the transcription API itself.
 
-use crate::vad::{VadProcessor, VadParams};
+use crate::vad::{WhisperVadProcessor, VadParams};
 use crate::error::Result;
 use std::path::Path;
 
@@ -33,14 +33,14 @@ impl Default for EnhancedVadParams {
 }
 
 /// Enhanced VAD processor with segment aggregation
-pub struct EnhancedVadProcessor {
-    inner: VadProcessor,
+pub struct EnhancedWhisperVadProcessor {
+    inner: WhisperVadProcessor,
 }
 
-impl EnhancedVadProcessor {
+impl EnhancedWhisperVadProcessor {
     pub fn new<P: AsRef<Path>>(model_path: P) -> Result<Self> {
         Ok(Self {
-            inner: VadProcessor::new(model_path)?,
+            inner: WhisperVadProcessor::new(model_path)?,
         })
     }
 
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_segment_aggregation() {
-        let processor = EnhancedVadProcessor {
+        let processor = EnhancedWhisperVadProcessor {
             inner: unsafe { std::mem::zeroed() }, // Mock for testing aggregation logic
         };
 
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_max_duration_split() {
-        let processor = EnhancedVadProcessor {
+        let processor = EnhancedWhisperVadProcessor {
             inner: unsafe { std::mem::zeroed() },
         };
 

@@ -69,16 +69,16 @@ pub use params::{
 pub use state::{Segment, TranscriptionResult, WhisperState};
 pub use stream::{StreamConfig, StreamConfigBuilder, WhisperStream};
 pub use stream_pcm::{
-    PcmFormat, PcmReader, PcmReaderConfig, StreamPcm, StreamPcmConfig, vad_simple,
+    PcmFormat, PcmReader, PcmReaderConfig, WhisperStreamPcm, WhisperStreamPcmConfig, vad_simple,
 };
 pub use vad::{
-    VadContextParams, VadParams, VadParamsBuilder, VadProcessor, VadSegments,
+    VadContextParams, VadParams, VadParamsBuilder, WhisperVadProcessor, VadSegments,
 };
 
 // Re-export for benchmarks
 #[doc(hidden)]
 pub mod bench_helpers {
-    pub use crate::vad::{VadProcessor, VadParams};
+    pub use crate::vad::{WhisperVadProcessor, VadParams};
 }
 
 #[cfg(feature = "async")]

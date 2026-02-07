@@ -266,20 +266,23 @@ fn info() -> Result<()> {
         if target_entry.file_type()?.is_dir() {
             let target_name = target_entry.file_name();
 
+            let target_str = target_name.to_string_lossy();
+            let lib_name = if target_str.contains("windows") {
+                "whisper.lib"
+            } else {
+                "libwhisper.a"
+            };
+
             for profile_entry in fs::read_dir(target_entry.path())? {
                 let profile_entry = profile_entry?;
                 if profile_entry.file_type()?.is_dir() {
                     let profile_name = profile_entry.file_name();
-                    let lib_path = profile_entry.path().join(if cfg!(windows) {
-                        "whisper.lib"
-                    } else {
-                        "libwhisper.a"
-                    });
+                    let lib_path = profile_entry.path().join(lib_name);
 
                     if lib_path.exists() {
                         let size = fs::metadata(&lib_path)?.len();
                         println!("  {} / {} ({:.2} MB)",
-                            target_name.to_string_lossy(),
+                            target_str,
                             profile_name.to_string_lossy(),
                             size as f64 / 1_048_576.0
                         );
@@ -300,12 +303,12 @@ fn test_setup(force: bool) -> Result<()> {
     println!("Setting up test models in {}", models_dir.display());
     println!();
 
-    let models: &[(&str, &str, &str)] = &[
-        ("ggml-tiny.en.bin", "download-ggml-model.cmd", "tiny.en"),
-        ("ggml-silero-v6.2.0.bin", "download-vad-model.cmd", "silero-v6.2.0"),
+    let models: &[(&str, &str, &str, &str)] = &[
+        ("ggml-tiny.en.bin", "download-ggml-model.cmd", "download-ggml-model.sh", "tiny.en"),
+        ("ggml-silero-v6.2.0.bin", "download-vad-model.cmd", "download-vad-model.sh", "silero-v6.2.0"),
     ];
 
-    for (filename, script, arg) in models {
+    for (filename, cmd_script, sh_script, arg) in models {
         let model_path = models_dir.join(filename);
 
         if model_path.exists() && !force {
@@ -318,11 +321,20 @@ fn test_setup(force: bool) -> Result<()> {
         }
 
         println!("  [download] {} ...", filename);
-        let script_path = models_dir.join(script);
-        let status = std::process::Command::new("cmd")
-            .args(["/c", &script_path.to_string_lossy(), arg, &models_dir.to_string_lossy()])
-            .status()
-            .context(format!("Failed to run {}", script))?;
+
+        let status = if cfg!(windows) {
+            let script_path = models_dir.join(cmd_script);
+            std::process::Command::new("cmd")
+                .args(["/c", &script_path.to_string_lossy(), arg, &models_dir.to_string_lossy()])
+                .status()
+                .context(format!("Failed to run {}", cmd_script))?
+        } else {
+            let script_path = models_dir.join(sh_script);
+            std::process::Command::new("bash")
+                .args([&script_path.to_string_lossy().to_string(), arg.to_string(), models_dir.to_string_lossy().to_string()])
+                .status()
+                .context(format!("Failed to run {}", sh_script))?
+        };
 
         if !status.success() {
             anyhow::bail!("Download failed for {}", filename);
@@ -371,6 +383,9 @@ fn detect_host() -> Option<String> {
 
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     return Some("aarch64-apple-darwin".to_string());
+
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    return Some("aarch64-unknown-linux-gnu".to_string());
 
     None
 }

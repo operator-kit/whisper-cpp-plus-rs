@@ -9,7 +9,7 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Safe, idiomatic Rust bindings for whisper.cpp"
-readme = "../README.md"
+readme = "README.md"
 
 [dependencies]
 whisper-sys = { path = "../whisper-sys", version = "0.1.0" }

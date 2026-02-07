@@ -9,6 +9,7 @@ repository.workspace = true
 description = "Model quantization utilities for whisper-cpp-rs"
 keywords = ["whisper", "quantization", "compression", "ml", "optimization"]
 categories = ["science", "compression"]
+readme = "README.md"
 publish = false
 
 [dependencies]

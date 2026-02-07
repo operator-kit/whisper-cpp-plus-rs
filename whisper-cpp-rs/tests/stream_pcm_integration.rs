@@ -1,12 +1,12 @@
-//! Integration tests for StreamPcm — pipe real WAV audio through PcmReader → StreamPcm
+//! Integration tests for WhisperStreamPcm — pipe real WAV audio through PcmReader → WhisperStreamPcm
 
 mod common;
 
 use common::TestModels;
 use std::path::Path;
 use whisper_cpp_rs::{
-    FullParams, PcmFormat, PcmReader, PcmReaderConfig, SamplingStrategy, StreamPcm,
-    StreamPcmConfig, WhisperContext,
+    FullParams, PcmFormat, PcmReader, PcmReaderConfig, SamplingStrategy, WhisperStreamPcm,
+    WhisperStreamPcmConfig, WhisperContext,
 };
 
 /// Load a WAV file, return raw PCM bytes in the given format + the f32 sample count.
@@ -98,7 +98,7 @@ fn test_stream_pcm_fixed_step_f32() {
         },
     );
 
-    let config = StreamPcmConfig {
+    let config = WhisperStreamPcmConfig {
         step_ms: 3000,
         length_ms: 10000,
         keep_ms: 200,
@@ -106,7 +106,7 @@ fn test_stream_pcm_fixed_step_f32() {
         ..Default::default()
     };
 
-    let mut stream = StreamPcm::new(&ctx, params, config, reader).unwrap();
+    let mut stream = WhisperStreamPcm::new(&ctx, params, config, reader).unwrap();
 
     let mut all_text = String::new();
     stream
@@ -115,7 +115,7 @@ fn test_stream_pcm_fixed_step_f32() {
                 all_text.push_str(&seg.text);
             }
         })
-        .expect("StreamPcm::run failed");
+        .expect("WhisperStreamPcm::run failed");
 
     assert!(!all_text.is_empty(), "Should produce non-empty transcription");
     check_jfk_keywords(&all_text);
@@ -151,7 +151,7 @@ fn test_stream_pcm_fixed_step_s16() {
         },
     );
 
-    let config = StreamPcmConfig {
+    let config = WhisperStreamPcmConfig {
         step_ms: 3000,
         length_ms: 10000,
         keep_ms: 200,
@@ -159,7 +159,7 @@ fn test_stream_pcm_fixed_step_s16() {
         ..Default::default()
     };
 
-    let mut stream = StreamPcm::new(&ctx, params, config, reader).unwrap();
+    let mut stream = WhisperStreamPcm::new(&ctx, params, config, reader).unwrap();
 
     let mut all_text = String::new();
     stream
@@ -168,7 +168,7 @@ fn test_stream_pcm_fixed_step_s16() {
                 all_text.push_str(&seg.text);
             }
         })
-        .expect("StreamPcm::run failed");
+        .expect("WhisperStreamPcm::run failed");
 
     assert!(!all_text.is_empty(), "Should produce non-empty transcription");
     check_jfk_keywords(&all_text);
@@ -202,7 +202,7 @@ fn test_stream_pcm_vad_simple() {
         },
     );
 
-    let config = StreamPcmConfig {
+    let config = WhisperStreamPcmConfig {
         use_vad: true,
         length_ms: 10000,
         vad_thold: 0.6,
@@ -213,7 +213,7 @@ fn test_stream_pcm_vad_simple() {
         ..Default::default()
     };
 
-    let mut stream = StreamPcm::new(&ctx, params, config, reader).unwrap();
+    let mut stream = WhisperStreamPcm::new(&ctx, params, config, reader).unwrap();
 
     let mut all_text = String::new();
     let mut segment_count = 0;
@@ -229,7 +229,7 @@ fn test_stream_pcm_vad_simple() {
                 all_text.push(' ');
             }
         })
-        .expect("StreamPcm::run with VAD failed");
+        .expect("WhisperStreamPcm::run with VAD failed");
 
     println!("VAD produced {} transcription segments", segment_count);
     assert!(segment_count > 0, "VAD should produce at least 1 segment");
@@ -257,7 +257,7 @@ fn test_stream_pcm_vad_silero() {
     let (raw_bytes, _) = wav_to_raw_pcm(&jfk_path, PcmFormat::F32);
 
     let ctx = WhisperContext::new(&model_path).unwrap();
-    let vad = whisper_cpp_rs::VadProcessor::new(&vad_model_path).unwrap();
+    let vad = whisper_cpp_rs::WhisperVadProcessor::new(&vad_model_path).unwrap();
     let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
         .language("en");
 
@@ -270,7 +270,7 @@ fn test_stream_pcm_vad_silero() {
         },
     );
 
-    let config = StreamPcmConfig {
+    let config = WhisperStreamPcmConfig {
         use_vad: true,
         length_ms: 10000,
         vad_thold: 0.5,
@@ -280,7 +280,7 @@ fn test_stream_pcm_vad_silero() {
         ..Default::default()
     };
 
-    let mut stream = StreamPcm::with_vad(&ctx, params, config, reader, vad).unwrap();
+    let mut stream = WhisperStreamPcm::with_vad(&ctx, params, config, reader, vad).unwrap();
 
     let mut all_text = String::new();
     let mut segment_count = 0;
@@ -296,7 +296,7 @@ fn test_stream_pcm_vad_silero() {
                 all_text.push(' ');
             }
         })
-        .expect("StreamPcm::run with Silero VAD failed");
+        .expect("WhisperStreamPcm::run with Silero VAD failed");
 
     println!("Silero VAD produced {} segments", segment_count);
     assert!(segment_count > 0, "Silero VAD should produce >= 1 segment");

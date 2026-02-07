@@ -1,7 +1,7 @@
 //! Integration tests for VAD (Voice Activity Detection) with real audio
 
 use std::path::Path;
-use whisper_cpp_rs::{VadProcessor, VadParams, VadParamsBuilder, WhisperContext, FullParams, SamplingStrategy};
+use whisper_cpp_rs::{WhisperVadProcessor, VadParams, VadParamsBuilder, WhisperContext, FullParams, SamplingStrategy};
 
 /// Load WAV file and convert to 16kHz mono f32
 fn load_wav_16khz_mono(path: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
@@ -83,7 +83,7 @@ fn test_vad_with_jfk_audio() {
     println!("Loaded JFK audio: {} samples ({:.2}s)", audio.len(), audio_duration_s);
 
     // Initialize VAD processor
-    let mut vad = VadProcessor::new(vad_model_path)
+    let mut vad = WhisperVadProcessor::new(vad_model_path)
         .expect("Failed to load VAD model");
 
     // Configure VAD parameters for speech detection
@@ -178,7 +178,7 @@ fn test_vad_with_transcription() {
     let audio = load_wav_16khz_mono(jfk_path).expect("Failed to load JFK audio");
 
     // Initialize models
-    let mut vad = VadProcessor::new(vad_model_path)
+    let mut vad = WhisperVadProcessor::new(vad_model_path)
         .expect("Failed to load VAD model");
     let whisper_ctx = WhisperContext::new(whisper_model_path)
         .expect("Failed to load Whisper model");
@@ -258,7 +258,7 @@ fn test_vad_with_silence() {
         return;
     }
 
-    let mut vad = VadProcessor::new(vad_model_path)
+    let mut vad = WhisperVadProcessor::new(vad_model_path)
         .expect("Failed to load VAD model");
 
     // Create 3 seconds of silence
@@ -287,7 +287,7 @@ fn test_vad_with_mixed_audio() {
         return;
     }
 
-    let mut vad = VadProcessor::new(vad_model_path)
+    let mut vad = WhisperVadProcessor::new(vad_model_path)
         .expect("Failed to load VAD model");
 
     // Create artificial audio: noise, silence, noise, silence pattern

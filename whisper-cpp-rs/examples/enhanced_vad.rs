@@ -3,7 +3,7 @@
 use std::path::Path;
 use whisper_cpp_rs::{WhisperContext, TranscriptionParams};
 use whisper_cpp_rs::enhanced::vad::{
-    EnhancedVadProcessor, EnhancedVadParamsBuilder
+    EnhancedWhisperVadProcessor, EnhancedVadParamsBuilder
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load models
     let ctx = WhisperContext::new(model_path)?;
-    let mut vad = EnhancedVadProcessor::new(vad_model_path)?;
+    let mut vad = EnhancedWhisperVadProcessor::new(vad_model_path)?;
 
     // Configure enhanced VAD with segment aggregation
     let vad_params = EnhancedVadParamsBuilder::new()
