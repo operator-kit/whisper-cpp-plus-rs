@@ -2,7 +2,7 @@
 
 > **Pinned to whisper.cpp v1.8.3** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`)
 
-Safe, idiomatic Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — OpenAI's Whisper speech recognition model.
+Safe Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with real-time PCM streaming and VAD support — OpenAI's Whisper speech recognition model.
 
 [![Crates.io](https://img.shields.io/crates/v/whisper-cpp-plus.svg)](https://crates.io/crates/whisper-cpp-plus)
 [![Documentation](https://docs.rs/whisper-cpp-plus/badge.svg)](https://docs.rs/whisper-cpp-plus)
@@ -41,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-whisper-cpp-plus = "0.1.0"
+whisper-cpp-plus = "0.1.1"
 
 # Optional
 hound = "3.5"  # WAV file loading
@@ -56,10 +56,10 @@ hound = "3.5"  # WAV file loading
 ### Feature Flags
 
 ```toml
-whisper-cpp-plus = { version = "0.1.0", features = ["quantization"] }  # Model quantization
-whisper-cpp-plus = { version = "0.1.0", features = ["async"] }         # Async API
-whisper-cpp-plus = { version = "0.1.0", features = ["cuda"] }          # NVIDIA GPU
-whisper-cpp-plus = { version = "0.1.0", features = ["metal"] }         # macOS GPU
+whisper-cpp-plus = { version = "0.1.1", features = ["quantization"] }  # Model quantization
+whisper-cpp-plus = { version = "0.1.1", features = ["async"] }         # Async API
+whisper-cpp-plus = { version = "0.1.1", features = ["cuda"] }          # NVIDIA GPU
+whisper-cpp-plus = { version = "0.1.1", features = ["metal"] }         # macOS GPU
 ```
 
 ### CUDA GPU Acceleration
