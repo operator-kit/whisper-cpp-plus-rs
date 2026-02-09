@@ -2,9 +2,40 @@
 
 > **Pinned to whisper.cpp v1.8.3** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`)
 
-Safe, idiomatic Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — OpenAI's Whisper speech recognition model.
+Safe Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with **real-time PCM streaming** and VAD support.
 
-## Quick Start
+## Highlights
+
+- **Real-time PCM streaming** — feed raw audio chunks, get transcription as you go
+- **VAD integration** — Silero-based voice activity detection for intelligent chunking
+- **Full whisper.cpp API** — batch transcription, timestamps, language detection
+- **GPU acceleration** — CUDA, Metal, OpenBLAS support
+
+## Real-time Streaming
+
+Feed PCM audio chunks directly from a microphone or audio stream:
+
+```rust
+use whisper_cpp_plus::{WhisperStreamPcm, StreamPcmParams};
+
+let params = StreamPcmParams::builder()
+    .model_path("ggml-tiny.en.bin")
+    .vad_model_path("ggml-silero-v6.2.0.bin")
+    .build()?;
+
+let mut stream = WhisperStreamPcm::new(params)?;
+
+// Feed PCM chunks as they arrive (16kHz mono f32)
+for chunk in audio_source {
+    if let Some(text) = stream.process_audio(&chunk)? {
+        println!("Transcribed: {}", text);
+    }
+}
+```
+
+## Batch Transcription
+
+For pre-recorded audio files:
 
 ```rust
 use whisper_cpp_plus::{WhisperContext, TranscriptionParams};
@@ -12,7 +43,7 @@ use whisper_cpp_plus::{WhisperContext, TranscriptionParams};
 let ctx = WhisperContext::new("path/to/ggml-base.bin")?;
 let audio: Vec<f32> = load_audio(); // 16kHz mono f32
 
-// Simple transcription
+// Simple
 let text = ctx.transcribe(&audio)?;
 
 // With parameters

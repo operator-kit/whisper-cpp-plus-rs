@@ -4,13 +4,13 @@ members = ["whisper-cpp-plus-sys", "whisper-cpp-plus", "xtask"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.70.0"
 authors = ["Ross Morsali"]
 license = "MIT"
 repository = "https://github.com/getpinch/whisper-cpp-plus-rs"
-keywords = ["whisper", "speech", "transcription", "asr", "speech-to-text"]
+keywords = ["whisper", "speech", "transcription", "streaming", "speech-to-text"]
 categories = ["multimedia::audio", "api-bindings", "science::robotics"]
 
 [workspace.dependencies]

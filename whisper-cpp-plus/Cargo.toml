@@ -8,11 +8,11 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Safe, idiomatic Rust bindings for whisper.cpp"
+description = "Safe Rust bindings for whisper.cpp with real-time PCM streaming and VAD support"
 readme = "README.md"
 
 [dependencies]
-whisper-cpp-plus-sys = { path = "../whisper-cpp-plus-sys", version = "0.1.0" }
+whisper-cpp-plus-sys = { path = "../whisper-cpp-plus-sys", version = "0.1.1" }
 thiserror = { workspace = true }
 num_cpus = { workspace = true }
 flate2 = "1.0"
