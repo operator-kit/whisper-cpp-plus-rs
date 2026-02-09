@@ -4,10 +4,14 @@ use std::path::{Path, PathBuf};
 #[path = "cuda_detect.rs"]
 mod cuda_detect;
 
+/// Pinned commit from rmorse/whisper.cpp (stream-pcm branch, based on v1.8.3)
+const WHISPER_CPP_VERSION: &str = "02de44819ba4f9cf3f3d2a4adcfc2c5130d7140a";
+const WHISPER_CPP_REPO: &str = "rmorse/whisper.cpp";
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../vendor/whisper.cpp");
     println!("cargo:rerun-if-env-changed=WHISPER_PREBUILT_PATH");
+    println!("cargo:rerun-if-env-changed=WHISPER_CPP_SOURCE_DIR");
     for var in &cuda_detect::CUDA_PATH_ENV_VARS {
         println!("cargo:rerun-if-env-changed={}", var);
     }
@@ -37,16 +41,7 @@ fn main() {
 
 fn build_with_cmake(target_os: &str) {
     let out = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let whisper_root = out.join("whisper.cpp");
-
-    // Copy vendor source to OUT_DIR to avoid polluting the vendor directory.
-    // Uses a filtered copy that skips .git (submodule files Windows can't access).
-    if !whisper_root.exists() {
-        let src = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
-            .join("../vendor/whisper.cpp");
-        let src = src.canonicalize().expect("vendor/whisper.cpp not found");
-        copy_dir_filtered(&src, &whisper_root);
-    }
+    let whisper_root = get_whisper_source(&out);
 
     let mut config = cmake::Config::new(&whisper_root);
     config
@@ -139,6 +134,70 @@ fn copy_dir_filtered(src: &Path, dst: &Path) {
     }
 }
 
+/// Get whisper.cpp source: env override, local submodule, or download from GitHub
+fn get_whisper_source(out_dir: &Path) -> PathBuf {
+    let whisper_root = out_dir.join("whisper.cpp");
+
+    if whisper_root.exists() {
+        return whisper_root;
+    }
+
+    // Check env var override first
+    if let Ok(source_dir) = env::var("WHISPER_CPP_SOURCE_DIR") {
+        let src = PathBuf::from(&source_dir);
+        if src.join("include/whisper.h").exists() {
+            println!("cargo:warning=Using WHISPER_CPP_SOURCE_DIR: {}", source_dir);
+            copy_dir_filtered(&src, &whisper_root);
+            return whisper_root;
+        }
+        panic!(
+            "WHISPER_CPP_SOURCE_DIR set but whisper.h not found at {}/include/whisper.h",
+            source_dir
+        );
+    }
+
+    // Check local submodule (inside sys crate for dev)
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let bundled_path = manifest_dir.join("whisper.cpp");
+    if bundled_path.join("include/whisper.h").exists() {
+        copy_dir_filtered(&bundled_path, &whisper_root);
+        return whisper_root;
+    }
+
+    // Download from GitHub
+    let url = format!(
+        "https://github.com/{}/archive/{}.tar.gz",
+        WHISPER_CPP_REPO, WHISPER_CPP_VERSION
+    );
+
+    println!("cargo:warning=Downloading whisper.cpp from {}", url);
+
+    let tarball_path = out_dir.join("whisper.cpp.tar.gz");
+    let resp = ureq::get(&url)
+        .call()
+        .expect("failed to download whisper.cpp");
+    let mut file = std::fs::File::create(&tarball_path).unwrap();
+    std::io::copy(&mut resp.into_reader(), &mut file).unwrap();
+
+    // Extract
+    let tar_gz = std::fs::File::open(&tarball_path).unwrap();
+    let tar = flate2::read::GzDecoder::new(tar_gz);
+    let mut archive = tar::Archive::new(tar);
+    archive.unpack(out_dir).unwrap();
+
+    // Rename extracted folder (whisper.cpp-{commit} -> whisper.cpp)
+    std::fs::rename(
+        out_dir.join(format!("whisper.cpp-{}", WHISPER_CPP_VERSION)),
+        &whisper_root,
+    )
+    .unwrap();
+
+    // Cleanup tarball
+    let _ = std::fs::remove_file(&tarball_path);
+
+    whisper_root
+}
+
 /// Recursively add all subdirectories of `dir` to the native link search path.
 /// CMake places .lib/.a files in various nested directories.
 fn add_link_search_path_recursive(dir: &Path) {
@@ -162,14 +221,17 @@ fn add_link_search_path_recursive(dir: &Path) {
 fn build_quantize_wrapper() {
     #[cfg(feature = "quantization")]
     {
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let whisper_src = get_whisper_source(&out);
+
         cc::Build::new()
             .cpp(true)
             .std("c++17")
-            .include("../vendor/whisper.cpp/include")
-            .include("../vendor/whisper.cpp/ggml/include")
-            .include("../vendor/whisper.cpp/examples")
-            .file("../vendor/whisper.cpp/examples/common.cpp")
-            .file("../vendor/whisper.cpp/examples/common-ggml.cpp")
+            .include(whisper_src.join("include"))
+            .include(whisper_src.join("ggml/include"))
+            .include(whisper_src.join("examples"))
+            .file(whisper_src.join("examples/common.cpp"))
+            .file(whisper_src.join("examples/common-ggml.cpp"))
             .file("src/quantize_wrapper.cpp")
             .compile("quantize_wrapper");
     }
@@ -366,15 +428,19 @@ fn link_accelerator_libs(_target_os: &str) {
 // ---------------------------------------------------------------------------
 
 fn generate_bindings() {
-    println!("cargo:rerun-if-changed=../vendor/whisper.cpp/include/whisper.h");
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let whisper_src = get_whisper_source(&out_dir);
+    let header = whisper_src.join("include/whisper.h");
+
+    println!("cargo:rerun-if-changed={}", header.display());
 
     let bindings = bindgen::Builder::default()
-        .header("../vendor/whisper.cpp/include/whisper.h")
+        .header(header.to_str().unwrap())
         .clang_arg("-x")
         .clang_arg("c++")
         .clang_arg("-std=c++11")
-        .clang_arg("-I../vendor/whisper.cpp/include")
-        .clang_arg("-I../vendor/whisper.cpp/ggml/include")
+        .clang_arg(format!("-I{}", whisper_src.join("include").display()))
+        .clang_arg(format!("-I{}", whisper_src.join("ggml/include").display()))
         .allowlist_function("whisper_.*")
         .allowlist_type("whisper_.*")
         .allowlist_var("WHISPER_.*")
@@ -388,8 +454,7 @@ fn generate_bindings() {
         .generate()
         .expect("Unable to generate bindings");
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
-        .write_to_file(out_path.join("bindings.rs"))
+        .write_to_file(out_dir.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 }

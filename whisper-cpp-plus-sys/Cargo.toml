@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 description = "Low-level FFI bindings for whisper.cpp"
 readme = "README.md"
+exclude = ["whisper.cpp"]
 
 [dependencies]
 
@@ -15,6 +16,9 @@ readme = "README.md"
 cc = "1.0"
 cmake = "0.1"
 bindgen = "0.69"
+ureq = { version = "2.9", default-features = false, features = ["tls"] }
+flate2 = "1.0"
+tar = "0.4"
 
 [features]
 default = []
