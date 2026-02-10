@@ -98,6 +98,11 @@ fn build_with_cmake(target_os: &str) {
     println!("cargo:rustc-link-lib=static=ggml-base");
     println!("cargo:rustc-link-lib=static=ggml-cpu");
 
+    // On macOS, BLAS is enabled by default using Apple's Accelerate framework
+    if target_os == "macos" {
+        println!("cargo:rustc-link-lib=static=ggml-blas");
+    }
+
     if cfg!(feature = "cuda") {
         println!("cargo:rustc-link-lib=static=ggml-cuda");
     }
