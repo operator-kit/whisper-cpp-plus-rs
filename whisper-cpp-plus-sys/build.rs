@@ -447,11 +447,6 @@ fn generate_stub_bindings() {
 // This crate requires whisper.cpp which cannot be built in docs.rs's sandbox.
 // For actual usage, build locally or see the repository.
 
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-#![allow(non_upper_case_globals)]
-#![allow(dead_code)]
-
 pub type whisper_context = core::ffi::c_void;
 pub type whisper_state = core::ffi::c_void;
 pub type whisper_token = i32;
@@ -560,15 +555,66 @@ pub const WHISPER_N_FFT: u32 = 400;
 pub const WHISPER_HOP_LENGTH: u32 = 160;
 pub const WHISPER_CHUNK_SIZE: u32 = 30;
 
+// Sampling strategy enum
+pub const whisper_sampling_strategy_WHISPER_SAMPLING_GREEDY: core::ffi::c_int = 0;
+pub const whisper_sampling_strategy_WHISPER_SAMPLING_BEAM_SEARCH: core::ffi::c_int = 1;
+
 // Stub function declarations (not callable, just for docs)
 extern "C" {
+    // Context initialization/cleanup
     pub fn whisper_init_from_file_with_params(
         path: *const core::ffi::c_char,
+        params: whisper_context_params,
+    ) -> *mut whisper_context;
+    pub fn whisper_init_from_buffer_with_params(
+        buffer: *const core::ffi::c_void,
+        buffer_size: usize,
         params: whisper_context_params,
     ) -> *mut whisper_context;
     pub fn whisper_free(ctx: *mut whisper_context);
     pub fn whisper_init_state(ctx: *mut whisper_context) -> *mut whisper_state;
     pub fn whisper_free_state(state: *mut whisper_state);
+    pub fn whisper_ctx_init_openvino_encoder(
+        ctx: *mut whisper_context,
+        model_path: *const core::ffi::c_char,
+        device: *const core::ffi::c_char,
+        cache_dir: *const core::ffi::c_char,
+    ) -> core::ffi::c_int;
+
+    // Context info
+    pub fn whisper_context_default_params() -> whisper_context_params;
+    pub fn whisper_n_vocab(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_n_audio_ctx(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_n_text_ctx(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_n_audio_state(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_n_text_state(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_n_text_head(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_n_text_layer(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_n_mels(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_n_len(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_n_len_from_state(state: *mut whisper_state) -> core::ffi::c_int;
+    pub fn whisper_is_multilingual(ctx: *mut whisper_context) -> core::ffi::c_int;
+
+    // Language
+    pub fn whisper_lang_max_id() -> core::ffi::c_int;
+    pub fn whisper_lang_id(lang: *const core::ffi::c_char) -> core::ffi::c_int;
+    pub fn whisper_lang_str(id: core::ffi::c_int) -> *const core::ffi::c_char;
+    pub fn whisper_lang_str_full(id: core::ffi::c_int) -> *const core::ffi::c_char;
+    pub fn whisper_lang_auto_detect(
+        ctx: *mut whisper_context,
+        offset_ms: core::ffi::c_int,
+        n_threads: core::ffi::c_int,
+        lang_probs: *mut f32,
+    ) -> core::ffi::c_int;
+    pub fn whisper_lang_auto_detect_with_state(
+        ctx: *mut whisper_context,
+        state: *mut whisper_state,
+        offset_ms: core::ffi::c_int,
+        n_threads: core::ffi::c_int,
+        lang_probs: *mut f32,
+    ) -> core::ffi::c_int;
+
+    // Transcription
     pub fn whisper_full_default_params(strategy: core::ffi::c_int) -> whisper_full_params;
     pub fn whisper_full(
         ctx: *mut whisper_context,
@@ -583,22 +629,116 @@ extern "C" {
         samples: *const f32,
         n_samples: core::ffi::c_int,
     ) -> core::ffi::c_int;
+    pub fn whisper_full_parallel(
+        ctx: *mut whisper_context,
+        params: whisper_full_params,
+        samples: *const f32,
+        n_samples: core::ffi::c_int,
+        n_processors: core::ffi::c_int,
+    ) -> core::ffi::c_int;
+
+    // Segment results
+    pub fn whisper_full_lang_id(ctx: *mut whisper_context) -> core::ffi::c_int;
+    pub fn whisper_full_lang_id_from_state(state: *mut whisper_state) -> core::ffi::c_int;
+    pub fn whisper_full_n_segments(ctx: *mut whisper_context) -> core::ffi::c_int;
     pub fn whisper_full_n_segments_from_state(state: *mut whisper_state) -> core::ffi::c_int;
-    pub fn whisper_full_get_segment_text_from_state(
-        state: *mut whisper_state,
-        i_segment: core::ffi::c_int,
-    ) -> *const core::ffi::c_char;
-    pub fn whisper_full_get_segment_t0_from_state(
-        state: *mut whisper_state,
-        i_segment: core::ffi::c_int,
-    ) -> i64;
-    pub fn whisper_full_get_segment_t1_from_state(
-        state: *mut whisper_state,
-        i_segment: core::ffi::c_int,
-    ) -> i64;
-    pub fn whisper_context_default_params() -> whisper_context_params;
-    pub fn whisper_is_multilingual(ctx: *mut whisper_context) -> core::ffi::c_int;
-    pub fn whisper_lang_id(lang: *const core::ffi::c_char) -> core::ffi::c_int;
+    pub fn whisper_full_get_segment_t0(ctx: *mut whisper_context, i_segment: core::ffi::c_int) -> i64;
+    pub fn whisper_full_get_segment_t0_from_state(state: *mut whisper_state, i_segment: core::ffi::c_int) -> i64;
+    pub fn whisper_full_get_segment_t1(ctx: *mut whisper_context, i_segment: core::ffi::c_int) -> i64;
+    pub fn whisper_full_get_segment_t1_from_state(state: *mut whisper_state, i_segment: core::ffi::c_int) -> i64;
+    pub fn whisper_full_get_segment_text(ctx: *mut whisper_context, i_segment: core::ffi::c_int) -> *const core::ffi::c_char;
+    pub fn whisper_full_get_segment_text_from_state(state: *mut whisper_state, i_segment: core::ffi::c_int) -> *const core::ffi::c_char;
+    pub fn whisper_full_get_segment_speaker_turn_next(ctx: *mut whisper_context, i_segment: core::ffi::c_int) -> bool;
+    pub fn whisper_full_get_segment_speaker_turn_next_from_state(state: *mut whisper_state, i_segment: core::ffi::c_int) -> bool;
+    pub fn whisper_full_get_segment_no_speech_prob(ctx: *mut whisper_context, i_segment: core::ffi::c_int) -> f32;
+    pub fn whisper_full_get_segment_no_speech_prob_from_state(state: *mut whisper_state, i_segment: core::ffi::c_int) -> f32;
+
+    // Token results
+    pub fn whisper_full_n_tokens(ctx: *mut whisper_context, i_segment: core::ffi::c_int) -> core::ffi::c_int;
+    pub fn whisper_full_n_tokens_from_state(state: *mut whisper_state, i_segment: core::ffi::c_int) -> core::ffi::c_int;
+    pub fn whisper_full_get_token_text(ctx: *mut whisper_context, i_segment: core::ffi::c_int, i_token: core::ffi::c_int) -> *const core::ffi::c_char;
+    pub fn whisper_full_get_token_text_from_state(ctx: *mut whisper_context, state: *mut whisper_state, i_segment: core::ffi::c_int, i_token: core::ffi::c_int) -> *const core::ffi::c_char;
+    pub fn whisper_full_get_token_id(ctx: *mut whisper_context, i_segment: core::ffi::c_int, i_token: core::ffi::c_int) -> whisper_token;
+    pub fn whisper_full_get_token_id_from_state(state: *mut whisper_state, i_segment: core::ffi::c_int, i_token: core::ffi::c_int) -> whisper_token;
+    pub fn whisper_full_get_token_p(ctx: *mut whisper_context, i_segment: core::ffi::c_int, i_token: core::ffi::c_int) -> f32;
+    pub fn whisper_full_get_token_p_from_state(state: *mut whisper_state, i_segment: core::ffi::c_int, i_token: core::ffi::c_int) -> f32;
+    pub fn whisper_full_get_token_data(ctx: *mut whisper_context, i_segment: core::ffi::c_int, i_token: core::ffi::c_int) -> whisper_token_data;
+    pub fn whisper_full_get_token_data_from_state(state: *mut whisper_state, i_segment: core::ffi::c_int, i_token: core::ffi::c_int) -> whisper_token_data;
+
+    // Token utilities
+    pub fn whisper_token_to_str(ctx: *mut whisper_context, token: whisper_token) -> *const core::ffi::c_char;
+    pub fn whisper_token_eot(ctx: *mut whisper_context) -> whisper_token;
+    pub fn whisper_token_sot(ctx: *mut whisper_context) -> whisper_token;
+    pub fn whisper_token_prev(ctx: *mut whisper_context) -> whisper_token;
+    pub fn whisper_token_solm(ctx: *mut whisper_context) -> whisper_token;
+    pub fn whisper_token_not(ctx: *mut whisper_context) -> whisper_token;
+    pub fn whisper_token_beg(ctx: *mut whisper_context) -> whisper_token;
+    pub fn whisper_token_lang(ctx: *mut whisper_context, lang_id: core::ffi::c_int) -> whisper_token;
+    pub fn whisper_token_translate(ctx: *mut whisper_context) -> whisper_token;
+    pub fn whisper_token_transcribe(ctx: *mut whisper_context) -> whisper_token;
+
+    // Timing
+    pub fn whisper_print_timings(ctx: *mut whisper_context);
+    pub fn whisper_reset_timings(ctx: *mut whisper_context);
+    pub fn whisper_print_system_info() -> *const core::ffi::c_char;
+
+    // VAD
+    pub fn whisper_vad_init(ctx: *mut whisper_context, model_path: *const core::ffi::c_char) -> *mut whisper_vad_context;
+    pub fn whisper_vad_init_from_buffer(ctx: *mut whisper_context, buffer: *const core::ffi::c_void, buffer_size: usize) -> *mut whisper_vad_context;
+    pub fn whisper_vad_init_with_params(model_path: *const core::ffi::c_char, params: whisper_vad_context_params) -> *mut whisper_vad_context;
+    pub fn whisper_vad_init_from_buffer_with_params(buffer: *const core::ffi::c_void, buffer_size: usize, params: whisper_vad_context_params) -> *mut whisper_vad_context;
+    pub fn whisper_vad_init_from_file_with_params(model_path: *const core::ffi::c_char, params: whisper_vad_context_params) -> *mut whisper_vad_context;
+    pub fn whisper_vad_free(vad_ctx: *mut whisper_vad_context);
+    pub fn whisper_vad_default_params() -> whisper_vad_params;
+    pub fn whisper_vad_default_context_params() -> whisper_vad_context_params;
+    pub fn whisper_vad_detect_speech(vad_ctx: *mut whisper_vad_context, samples: *const f32, n_samples: core::ffi::c_int) -> bool;
+    pub fn whisper_vad_n_probs(vad_ctx: *mut whisper_vad_context) -> core::ffi::c_int;
+    pub fn whisper_vad_probs(vad_ctx: *mut whisper_vad_context) -> *const f32;
+    pub fn whisper_vad_segments_from_probs(vad_ctx: *mut whisper_vad_context, params: whisper_vad_params) -> *mut whisper_vad_segments;
+    pub fn whisper_vad_segments_from_samples(vad_ctx: *mut whisper_vad_context, params: whisper_vad_params, samples: *const f32, n_samples: core::ffi::c_int) -> *mut whisper_vad_segments;
+    pub fn whisper_vad_segments_free(segments: *mut whisper_vad_segments);
+    pub fn whisper_vad_free_segments(segments: *mut whisper_vad_segments);
+    pub fn whisper_vad_segments_n_segments(segments: *mut whisper_vad_segments) -> core::ffi::c_int;
+    pub fn whisper_vad_segments_get_segment_t0(segments: *mut whisper_vad_segments, i_segment: core::ffi::c_int) -> f32;
+    pub fn whisper_vad_segments_get_segment_t1(segments: *mut whisper_vad_segments, i_segment: core::ffi::c_int) -> f32;
+}
+
+// Additional type stubs
+pub type whisper_vad_context = core::ffi::c_void;
+pub type whisper_vad_segments = core::ffi::c_void;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct whisper_vad_context_params {
+    pub use_gpu: bool,
+    pub gpu_device: core::ffi::c_int,
+    pub n_threads: core::ffi::c_int,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct whisper_vad_params {
+    pub threshold: f32,
+    pub min_speech_duration_ms: core::ffi::c_int,
+    pub min_silence_duration_ms: core::ffi::c_int,
+    pub max_speech_duration_s: f32,
+    pub speech_pad_ms: core::ffi::c_int,
+    pub samples_overlap: f32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct whisper_token_data {
+    pub id: whisper_token,
+    pub tid: whisper_token,
+    pub p: f32,
+    pub plog: f32,
+    pub pt: f32,
+    pub ptsum: f32,
+    pub t0: i64,
+    pub t1: i64,
+    pub t_dtw: i64,
+    pub vlen: f32,
 }
 "#;
     std::fs::write(out_dir.join("bindings.rs"), stub_bindings)

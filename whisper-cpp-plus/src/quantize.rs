@@ -6,7 +6,7 @@
 //!
 //! Enable with the `quantization` feature flag:
 //! ```toml
-//! whisper-cpp-plus = { version = "0.1.2", features = ["quantization"] }
+//! whisper-cpp-plus = { version = "0.1.3", features = ["quantization"] }
 //! ```
 
 use std::ffi::CString;

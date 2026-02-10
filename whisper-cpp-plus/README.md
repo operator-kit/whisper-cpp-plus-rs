@@ -103,7 +103,7 @@ for seg in &result.segments {
 Enable in `Cargo.toml`:
 ```toml
 [dependencies]
-whisper-cpp-plus = { version = "0.1.2", features = ["cuda"] }
+whisper-cpp-plus = { version = "0.1.3", features = ["cuda"] }
 ```
 
 ## Modules
