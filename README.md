@@ -334,7 +334,7 @@ All unsafe FFI operations encapsulated with null pointer checks, lifetime enforc
 ## Development
 
 ```bash
-git clone --recursive https://github.com/getpinch/whisper-cpp-plus-rs
+git clone --recursive git@github.com:getpinch/whisper-cpp-plus-rs
 cd whisper-cpp-plus-rs
 cargo xtask test-setup
 cargo test
