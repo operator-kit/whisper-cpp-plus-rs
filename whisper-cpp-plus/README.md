@@ -11,13 +11,64 @@ Safe Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) w
 - **Full whisper.cpp API** — batch transcription, timestamps, language detection
 - **GPU acceleration** — CUDA, Metal, OpenBLAS support
 
-## Real-time Streaming
+## PCM Streaming (VAD-driven)
 
-Two streaming APIs for different use cases:
+Process raw PCM from any `Read` source (file, stdin, socket, microphone) with automatic VAD segmentation. Port of `stream-pcm.cpp`.
 
-### WhisperStream — Sliding Window (port of stream.cpp)
+```rust
+use whisper_cpp_plus::{WhisperContext, WhisperStreamPcm, WhisperStreamPcmConfig,
+                       PcmReader, PcmReaderConfig, FullParams, SamplingStrategy};
 
-Feed audio chunks and process with configurable step/overlap:
+let ctx = WhisperContext::new("ggml-tiny.en.bin")?;
+let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
+let config = WhisperStreamPcmConfig { use_vad: true, ..Default::default() };
+
+// Any Read source — here a file, but could be stdin, socket, etc.
+let source = std::fs::File::open("audio.pcm")?;
+let reader = PcmReader::new(Box::new(source), PcmReaderConfig::default());
+
+let mut stream = WhisperStreamPcm::new(&ctx, params, config, reader)?;
+
+stream.run(|segments, _start_ms, _end_ms| {
+    for seg in segments {
+        println!("[{:.2}s - {:.2}s] {}", seg.start_seconds(), seg.end_seconds(), seg.text);
+    }
+})?;
+```
+
+## File Transcription
+
+For pre-recorded audio files — load a WAV (16kHz mono), transcribe in one shot:
+
+```rust
+use whisper_cpp_plus::{WhisperContext, FullParams, SamplingStrategy};
+
+let ctx = WhisperContext::new("ggml-base.en.bin")?;
+
+// Load WAV file as 16kHz mono f32 samples (using hound crate)
+let mut reader = hound::WavReader::open("audio.wav")?;
+let audio: Vec<f32> = reader.samples::<i16>()
+    .map(|s| s.unwrap() as f32 / 32768.0)
+    .collect();
+
+// Simple — just get the text
+let text = ctx.transcribe(&audio)?;
+println!("{}", text);
+
+// With parameters — get timestamped segments
+let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
+    .language("en")
+    .no_timestamps(false);
+
+let result = ctx.transcribe_with_full_params(&audio, params)?;
+for seg in &result.segments {
+    println!("[{:.2}s - {:.2}s] {}", seg.start_seconds(), seg.end_seconds(), seg.text);
+}
+```
+
+## Sliding Window Streaming
+
+Feed audio chunks and process with configurable step/overlap. Port of `stream.cpp`.
 
 ```rust
 use whisper_cpp_plus::{WhisperContext, WhisperStream, WhisperStreamConfig, FullParams};
@@ -39,58 +90,6 @@ while let Some(segments) = stream.process_step()? {
 }
 ```
 
-### WhisperStreamPcm — VAD-driven (port of stream-pcm.cpp)
-
-Process raw PCM from any `Read` source with automatic VAD segmentation:
-
-```rust
-use whisper_cpp_plus::{WhisperContext, WhisperStreamPcm, WhisperStreamPcmConfig,
-                       PcmReader, PcmReaderConfig, FullParams};
-use std::fs::File;
-
-let ctx = WhisperContext::new("ggml-tiny.en.bin")?;
-let params = FullParams::default().language("en");
-let config = WhisperStreamPcmConfig { use_vad: true, ..Default::default() };
-
-// Create PCM reader from any Read source (file, stdin, socket, etc.)
-let file = File::open("audio.pcm")?;
-let reader = PcmReader::new(Box::new(file), PcmReaderConfig::default());
-
-let mut stream = WhisperStreamPcm::new(&ctx, params, config, reader)?;
-
-// Process until EOF
-stream.run(|segments, start_ms, end_ms| {
-    for seg in segments {
-        println!("[{:.2}s] {}", seg.start_seconds(), seg.text);
-    }
-})?;
-```
-
-## Batch Transcription
-
-For pre-recorded audio files:
-
-```rust
-use whisper_cpp_plus::{WhisperContext, TranscriptionParams};
-
-let ctx = WhisperContext::new("path/to/ggml-base.bin")?;
-let audio: Vec<f32> = load_audio(); // 16kHz mono f32
-
-// Simple
-let text = ctx.transcribe(&audio)?;
-
-// With parameters
-let params = TranscriptionParams::builder()
-    .language("en")
-    .temperature(0.8)
-    .enable_timestamps()
-    .build();
-let result = ctx.transcribe_with_params(&audio, params)?;
-for seg in &result.segments {
-    println!("[{:.1}s-{:.1}s] {}", seg.start_seconds(), seg.end_seconds(), seg.text);
-}
-```
-
 ## Features
 
 | Feature | Description |
@@ -103,7 +102,7 @@ for seg in &result.segments {
 Enable in `Cargo.toml`:
 ```toml
 [dependencies]
-whisper-cpp-plus = { version = "0.1.3", features = ["cuda"] }
+whisper-cpp-plus = { version = "0.1.4", features = ["cuda"] }
 ```
 
 ## Modules

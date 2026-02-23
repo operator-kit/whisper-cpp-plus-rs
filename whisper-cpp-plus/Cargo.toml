@@ -12,7 +12,7 @@ description = "Safe Rust bindings for whisper.cpp with real-time PCM streaming a
 readme = "README.md"
 
 [dependencies]
-whisper-cpp-plus-sys = { path = "../whisper-cpp-plus-sys", version = "0.1.3" }
+whisper-cpp-plus-sys = { path = "../whisper-cpp-plus-sys", version = "0.1.4" }
 thiserror = { workspace = true }
 num_cpus = { workspace = true }
 flate2 = "1.0"

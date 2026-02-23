@@ -41,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-whisper-cpp-plus = "0.1.3"
+whisper-cpp-plus = "0.1.4"
 
 # Optional
 hound = "3.5"  # WAV file loading
@@ -56,10 +56,10 @@ hound = "3.5"  # WAV file loading
 ### Feature Flags
 
 ```toml
-whisper-cpp-plus = { version = "0.1.3", features = ["quantization"] }  # Model quantization
-whisper-cpp-plus = { version = "0.1.3", features = ["async"] }         # Async API
-whisper-cpp-plus = { version = "0.1.3", features = ["cuda"] }          # NVIDIA GPU
-whisper-cpp-plus = { version = "0.1.3", features = ["metal"] }         # macOS GPU
+whisper-cpp-plus = { version = "0.1.4", features = ["quantization"] }  # Model quantization
+whisper-cpp-plus = { version = "0.1.4", features = ["async"] }         # Async API
+whisper-cpp-plus = { version = "0.1.4", features = ["cuda"] }          # NVIDIA GPU
+whisper-cpp-plus = { version = "0.1.4", features = ["metal"] }         # macOS GPU
 ```
 
 ### CUDA GPU Acceleration
@@ -334,7 +334,7 @@ All unsafe FFI operations encapsulated with null pointer checks, lifetime enforc
 ## Development
 
 ```bash
-git clone --recursive git@github.com:getpinch/whisper-cpp-plus-rs
+git clone --recursive git@github.com:operator-kit/whisper-cpp-plus-rs
 cd whisper-cpp-plus-rs
 cargo xtask test-setup
 cargo test
@@ -354,4 +354,4 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions and module
 ## Support
 
 - [API Documentation](https://docs.rs/whisper-cpp-plus)
-- [Issue Tracker](https://github.com/getpinch/whisper-cpp-plus-rs/issues)
+- [Issue Tracker](https://github.com/operator-kit/whisper-cpp-plus-rs/issues)

@@ -4,7 +4,7 @@
 
 Low-level FFI bindings to [whisper.cpp](https://github.com/ggerganov/whisper.cpp) for Rust.
 
-This is the foundation crate for [whisper-cpp-plus](https://github.com/getpinch/whisper-cpp-plus-rs). For a safe, high-level API, use `whisper-cpp-plus` instead.
+This is the foundation crate for [whisper-cpp-plus](https://github.com/operator-kit/whisper-cpp-plus-rs). For a safe, high-level API, use `whisper-cpp-plus` instead.
 
 ## Features
 
