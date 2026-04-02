@@ -105,8 +105,14 @@ fn build_with_cmake(target_os: &str) {
     println!("cargo:rustc-link-lib=static=ggml-base");
     println!("cargo:rustc-link-lib=static=ggml-cpu");
 
-    // On macOS, BLAS is enabled by default using Apple's Accelerate framework
-    if target_os == "macos" {
+    // ggml may build a BLAS backend on macOS (Accelerate) even if we didn't
+    // explicitly enable OpenBLAS. Link it if CMake produced it.
+    let blas_filename = if target_os == "windows" {
+        "ggml-blas.lib".to_string()
+    } else {
+        "libggml-blas.a".to_string()
+    };
+    if file_exists_recursive(&out.join("build"), &blas_filename) {
         println!("cargo:rustc-link-lib=static=ggml-blas");
     }
 
@@ -208,6 +214,29 @@ fn get_whisper_source(out_dir: &Path) -> PathBuf {
     let _ = std::fs::remove_file(&tarball_path);
 
     whisper_root
+}
+
+/// Search recursively for `filename` under `dir`.
+fn file_exists_recursive(dir: &Path, filename: &str) -> bool {
+    if !dir.exists() {
+        return false;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if path.file_name().and_then(|s| s.to_str()) == Some(filename) {
+                return true;
+            }
+        } else if path.is_dir() {
+            if file_exists_recursive(&path, filename) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Recursively add all subdirectories of `dir` to the native link search path.
@@ -319,7 +348,7 @@ fn check_and_use_prebuilt(target_os: &str) -> Option<PathBuf> {
 fn link_prebuilt_ggml_libs(dir: &Path, target_os: &str) {
     let ext = if target_os == "windows" { "lib" } else { "a" };
 
-    let optional_libs = ["ggml", "ggml-base", "ggml-cpu"];
+    let optional_libs = ["ggml", "ggml-base", "ggml-cpu", "ggml-blas"];
     for lib in &optional_libs {
         let filename = if target_os == "windows" {
             format!("{}.{}", lib, ext)

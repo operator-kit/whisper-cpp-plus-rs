@@ -14,6 +14,22 @@ use std::thread;
 
 const WHISPER_SAMPLE_RATE: i32 = 16000;
 
+#[cfg(target_os = "macos")]
+fn set_thread_qos_user_interactive() {
+    // Prioritize capture thread so we don't lose audio under CPU contention.
+    // Fire-and-forget: some environments may return EPERM after incompatible scheduling calls.
+    unsafe {
+        extern "C" {
+            fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
+        }
+        const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
+        let _ = pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_thread_qos_user_interactive() {}
+
 // ---------------------------------------------------------------------------
 // PcmFormat
 // ---------------------------------------------------------------------------
@@ -59,6 +75,8 @@ struct RingBuffer {
     audio_len: usize,
     /// Read position in ring (next sample to pop).
     audio_read: usize,
+    /// Total number of samples dropped due to ring buffer overflow.
+    dropped: u64,
     eof: bool,
 }
 
@@ -82,6 +100,7 @@ impl PcmReader {
             audio_pos: 0,
             audio_len: 0,
             audio_read: 0,
+            dropped: 0,
             eof: false,
         }));
 
@@ -92,6 +111,7 @@ impl PcmReader {
         let format = config.format;
 
         let handle = thread::spawn(move || {
+            set_thread_qos_user_interactive();
             reader_loop(source, shared_clone, stop_clone, format);
         });
 
@@ -135,6 +155,11 @@ impl PcmReader {
         self.shared.lock().unwrap().audio_len
     }
 
+    /// Total number of samples dropped due to ring buffer overflow.
+    pub fn dropped_samples(&self) -> u64 {
+        self.shared.lock().unwrap().dropped
+    }
+
     /// Whether the source has reached EOF.
     pub fn is_eof(&self) -> bool {
         self.shared.lock().unwrap().eof
@@ -142,8 +167,7 @@ impl PcmReader {
 
     /// Signal the reader thread to stop.
     pub fn stop(&mut self) {
-        self.stop
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(h) = self.handle.take() {
             let _ = h.join();
         }
@@ -208,22 +232,18 @@ fn reader_loop(
 
         // Convert to f32
         let samples: Vec<f32> = match format {
-            PcmFormat::F32 => {
-                (0..n_samples)
-                    .map(|i| {
-                        let o = i * 4;
-                        f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]])
-                    })
-                    .collect()
-            }
-            PcmFormat::S16 => {
-                (0..n_samples)
-                    .map(|i| {
-                        let o = i * 2;
-                        i16::from_le_bytes([data[o], data[o + 1]]) as f32 / 32768.0
-                    })
-                    .collect()
-            }
+            PcmFormat::F32 => (0..n_samples)
+                .map(|i| {
+                    let o = i * 4;
+                    f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]])
+                })
+                .collect(),
+            PcmFormat::S16 => (0..n_samples)
+                .map(|i| {
+                    let o = i * 2;
+                    i16::from_le_bytes([data[o], data[o + 1]]) as f32 / 32768.0
+                })
+                .collect(),
         };
 
         // Push into ring buffer
@@ -244,6 +264,7 @@ fn push_samples(shared: &Arc<Mutex<RingBuffer>>, data: &[f32]) {
 
     // If more samples than ring capacity, skip the oldest
     if n > cap {
+        ring.dropped += (n - cap) as u64;
         src = &data[n - cap..];
         n = cap;
     }
@@ -253,6 +274,7 @@ fn push_samples(shared: &Arc<Mutex<RingBuffer>>, data: &[f32]) {
         let drop = n - (cap - ring.audio_len);
         ring.audio_read = (ring.audio_read + drop) % cap;
         ring.audio_len -= drop;
+        ring.dropped += drop as u64;
     }
 
     // Write into ring
@@ -474,10 +496,8 @@ impl WhisperStreamPcm {
         } else {
             (config.step_ms as f64 * 0.001 * WHISPER_SAMPLE_RATE as f64) as usize
         };
-        let n_samples_len =
-            (config.length_ms as f64 * 0.001 * WHISPER_SAMPLE_RATE as f64) as usize;
-        let n_samples_keep =
-            (config.keep_ms as f64 * 0.001 * WHISPER_SAMPLE_RATE as f64) as usize;
+        let n_samples_len = (config.length_ms as f64 * 0.001 * WHISPER_SAMPLE_RATE as f64) as usize;
+        let n_samples_keep = (config.keep_ms as f64 * 0.001 * WHISPER_SAMPLE_RATE as f64) as usize;
 
         let n_new_line = if !config.use_vad && config.step_ms > 0 {
             (config.length_ms / config.step_ms - 1).max(1)
@@ -555,13 +575,10 @@ impl WhisperStreamPcm {
                     if self.reader.is_eof() && self.reader.available_samples() == 0 {
                         // Flush any remaining VAD speech
                         if self.config.use_vad && self.in_speech && !self.speech_buf.is_empty() {
-                            let segments =
-                                self.run_inference(&self.speech_buf.clone())?;
+                            let segments = self.run_inference(&self.speech_buf.clone())?;
                             if !segments.is_empty() {
-                                let start =
-                                    segments.first().map(|s| s.start_ms).unwrap_or(0);
-                                let end =
-                                    segments.last().map(|s| s.end_ms).unwrap_or(0);
+                                let start = segments.first().map(|s| s.start_ms).unwrap_or(0);
+                                let end = segments.last().map(|s| s.end_ms).unwrap_or(0);
                                 callback(&segments, start, end);
                             }
                             self.speech_buf.clear();
@@ -641,9 +658,7 @@ impl WhisperStreamPcm {
             if self.reader.is_eof() {
                 // Flush remaining speech
                 if self.in_speech && !self.speech_buf.is_empty() {
-                    let segments = self.run_inference(
-                        &self.speech_buf.clone(),
-                    )?;
+                    let segments = self.run_inference(&self.speech_buf.clone())?;
                     self.speech_buf.clear();
                     self.in_speech = false;
                     self.n_iter += 1;
@@ -707,9 +722,7 @@ impl WhisperStreamPcm {
             if self.speech_buf.len() >= self.vad_max_segment_samples
                 || self.silence_samples >= self.vad_silence_samples
             {
-                let segments = self.run_inference(
-                    &self.speech_buf.clone(),
-                )?;
+                let segments = self.run_inference(&self.speech_buf.clone())?;
                 self.speech_buf.clear();
                 self.in_speech = false;
                 self.silence_samples = 0;
@@ -770,8 +783,7 @@ impl WhisperStreamPcm {
         for i in 0..n_segments {
             let token_count = self.state.full_n_tokens(i);
             for j in 0..token_count {
-                self.prompt_tokens
-                    .push(self.state.full_get_token_id(i, j));
+                self.prompt_tokens.push(self.state.full_get_token_id(i, j));
             }
         }
     }
@@ -899,10 +911,71 @@ mod tests {
         let available = reader.available_samples();
         assert!(available <= 8000);
 
+        // Overflow should have been tracked
+        let dropped = reader.dropped_samples();
+        assert!(dropped > 0, "Expected dropped samples on overflow");
+
         let samples = reader.pop_ms(500);
         assert_eq!(samples.len(), 8000);
         // Last sample should be 15999.0
         assert!((samples[samples.len() - 1] - 15999.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_dropped_samples_zero_when_no_overflow() {
+        // Buffer holds 2000ms = 32000 samples, push only 16000
+        let n = 16000;
+        let mut raw = Vec::with_capacity(n * 4);
+        for i in 0..n {
+            let val = (i as f32 / n as f32) * 2.0 - 1.0;
+            raw.extend_from_slice(&val.to_le_bytes());
+        }
+
+        let cursor = std::io::Cursor::new(raw);
+        let config = PcmReaderConfig {
+            buffer_len_ms: 2000,
+            sample_rate: 16000,
+            format: PcmFormat::F32,
+        };
+        let reader = PcmReader::new(Box::new(cursor), config);
+
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        assert_eq!(reader.dropped_samples(), 0);
+    }
+
+    #[test]
+    fn test_dropped_samples_tracked_on_overflow() {
+        // Buffer holds 500ms = 8000 samples, push 16000 — should drop 8000
+        let n = 16000;
+        let mut raw = Vec::with_capacity(n * 4);
+        for i in 0..n {
+            raw.extend_from_slice(&(i as f32).to_le_bytes());
+        }
+
+        let cursor = std::io::Cursor::new(raw);
+        let config = PcmReaderConfig {
+            buffer_len_ms: 500,
+            sample_rate: 16000,
+            format: PcmFormat::F32,
+        };
+        let reader = PcmReader::new(Box::new(cursor), config);
+
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        let dropped = reader.dropped_samples();
+        assert_eq!(
+            dropped, 8000,
+            "Expected 8000 dropped samples, got {}",
+            dropped
+        );
+    }
+
+    #[test]
+    fn test_qos_does_not_panic() {
+        // On macOS this sets QoS, on other platforms it's a no-op.
+        // Either way it should not panic.
+        set_thread_qos_user_interactive();
     }
 
     #[test]

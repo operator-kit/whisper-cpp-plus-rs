@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 - **Thread-safe** — `WhisperContext` is `Send + Sync`, share via `Arc`
 - **Streaming** — real-time transcription via `WhisperStream` and `WhisperStreamPcm`
-- **VAD** — Silero Voice Activity Detection integration
+- **VAD** — simple energy VAD by default plus Silero Voice Activity Detection integration
 - **Enhanced VAD** — segment aggregation for optimal transcription chunks
 - **Temperature fallback** — quality-based retry with multiple temperatures
 - **Async** — `tokio::spawn_blocking` wrappers (feature = `async`)
@@ -153,6 +153,57 @@ loop {
     }
 }
 ```
+
+**PCM streaming (`WhisperStreamPcm`):**
+
+```rust
+use whisper_cpp_plus::{
+    FullParams, PcmFormat, PcmReader, PcmReaderConfig, SamplingStrategy, WhisperContext,
+    WhisperStreamPcm, WhisperStreamPcmConfig, WhisperVadProcessor,
+};
+
+let ctx = WhisperContext::new("model.bin")?;
+let vad = WhisperVadProcessor::new("models/ggml-silero-vad.bin")?;
+let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+
+let config = WhisperStreamPcmConfig {
+    use_vad: true,
+    vad_thold: 0.6,
+    vad_silence_ms: 800,
+    vad_pre_roll_ms: 300,
+    length_ms: 10000,
+    ..Default::default()
+};
+
+// The source must already yield raw PCM bytes matching PcmReaderConfig.
+// For this config that means 16 kHz mono f32 little-endian PCM.
+let source = std::fs::File::open("audio_f32_16khz_mono.pcm")?;
+let reader = PcmReader::new(
+    Box::new(source),
+    PcmReaderConfig {
+        buffer_len_ms: 10000,
+        sample_rate: 16000,
+        format: PcmFormat::F32,
+    },
+);
+
+let mut stream = WhisperStreamPcm::with_vad(&ctx, params, config, reader, vad)?;
+
+stream.run(|segments, _start_ms, _end_ms| {
+    for seg in segments {
+        println!("{}", seg.text.trim());
+    }
+})?;
+```
+
+Notes:
+
+- `PcmReader` does not decode WAV/MP3, resample audio, or convert stereo to mono. Your `Read` source must already be normalized to the format described by `PcmReaderConfig`.
+- `WhisperStreamPcm::new(...)` uses fixed-step mode or simple built-in VAD depending on `use_vad`.
+- `WhisperStreamPcm::with_vad(...)` uses an explicit `WhisperVadProcessor` (Silero VAD) and is the recommended path when you want Silero-based segmentation.
+- In VAD mode, `no_context` is forced internally to match `stream-pcm.cpp`.
+- In VAD mode, `run()` emits the next completed speech chunk in chronological order, and callers can usually append those segments directly.
+- In fixed-step mode, callbacks are produced from overlapping windows, so callers that build a cumulative transcript may need to reconcile repeated text across callbacks.
 
 **VAD preprocessing:**
 
