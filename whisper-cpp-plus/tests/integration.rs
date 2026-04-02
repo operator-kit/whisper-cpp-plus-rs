@@ -1,7 +1,7 @@
 mod common;
 
-use std::sync::Arc;
 use common::TestModels;
+use std::sync::Arc;
 use whisper_cpp_plus::{
     FullParams, SamplingStrategy, TranscriptionParams, WhisperContext, WhisperError,
 };
@@ -91,7 +91,11 @@ fn test_transcription_with_params() {
     // Check that we have both text and segments
     assert!(transcription.segments.len() >= 0);
     assert_eq!(
-        transcription.text.split_whitespace().collect::<Vec<_>>().len(),
+        transcription
+            .text
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .len(),
         transcription
             .segments
             .iter()
@@ -158,8 +162,7 @@ fn test_segment_timestamps() {
     let ctx = WhisperContext::new(&model_path).unwrap();
     let audio = vec![0.0f32; 16000 * 2]; // 2 seconds
 
-    let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
-        .no_timestamps(false);
+    let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).no_timestamps(false);
 
     let result = ctx.transcribe_with_full_params(&audio, params).unwrap();
 

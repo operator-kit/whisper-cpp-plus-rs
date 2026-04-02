@@ -143,13 +143,7 @@ impl WhisperVadProcessor {
             return false;
         }
 
-        unsafe {
-            ffi::whisper_vad_detect_speech(
-                self.ctx,
-                samples.as_ptr(),
-                samples.len() as i32,
-            )
-        }
+        unsafe { ffi::whisper_vad_detect_speech(self.ctx, samples.as_ptr(), samples.len() as i32) }
     }
 
     /// Get the number of probability values
@@ -175,17 +169,14 @@ impl WhisperVadProcessor {
 
     /// Get speech segments from probability values
     pub fn segments_from_probs(&mut self, params: &VadParams) -> Result<VadSegments> {
-        let segments_ptr = unsafe {
-            ffi::whisper_vad_segments_from_probs(self.ctx, params.to_ffi())
-        };
+        let segments_ptr =
+            unsafe { ffi::whisper_vad_segments_from_probs(self.ctx, params.to_ffi()) };
 
         if segments_ptr.is_null() {
             return Err(WhisperError::InvalidContext);
         }
 
-        Ok(VadSegments {
-            ptr: segments_ptr,
-        })
+        Ok(VadSegments { ptr: segments_ptr })
     }
 
     /// Get speech segments directly from audio samples
@@ -211,9 +202,7 @@ impl WhisperVadProcessor {
             return Err(WhisperError::InvalidContext);
         }
 
-        Ok(VadSegments {
-            ptr: segments_ptr,
-        })
+        Ok(VadSegments { ptr: segments_ptr })
     }
 }
 

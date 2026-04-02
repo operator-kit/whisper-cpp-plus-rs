@@ -16,11 +16,13 @@
 //! - Temperature fallback is a transcription enhancement for quality
 //! - Both can be used independently or together
 
-pub mod vad;
 pub mod fallback;
+pub mod vad;
 
-pub use vad::{EnhancedWhisperVadProcessor, EnhancedVadParams, EnhancedVadParamsBuilder, AudioChunk};
 pub use fallback::{
-    EnhancedTranscriptionParams, EnhancedTranscriptionParamsBuilder,
-    QualityThresholds, EnhancedWhisperState, TranscriptionAttempt
+    EnhancedTranscriptionParams, EnhancedTranscriptionParamsBuilder, EnhancedWhisperState,
+    QualityThresholds, TranscriptionAttempt,
+};
+pub use vad::{
+    AudioChunk, EnhancedVadParams, EnhancedVadParamsBuilder, EnhancedWhisperVadProcessor,
 };

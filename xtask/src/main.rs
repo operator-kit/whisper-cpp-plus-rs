@@ -119,10 +119,7 @@ fn prebuild(profile: &str, target: Option<String>, force: bool, cuda: bool) -> R
         println!();
         println!("2. Or add to .cargo/config.toml:");
         println!("   [env]");
-        println!(
-            "   WHISPER_PREBUILT_PATH = \"{}\"",
-            prebuilt_dir.display()
-        );
+        println!("   WHISPER_PREBUILT_PATH = \"{}\"", prebuilt_dir.display());
     } else {
         anyhow::bail!("Failed to create library file");
     }
@@ -130,18 +127,17 @@ fn prebuild(profile: &str, target: Option<String>, force: bool, cuda: bool) -> R
     Ok(())
 }
 
-fn build_whisper_cpp(
-    target: &str,
-    profile: &str,
-    output_dir: &Path,
-    cuda: bool,
-) -> Result<()> {
+fn build_whisper_cpp(target: &str, profile: &str, output_dir: &Path, cuda: bool) -> Result<()> {
     let root = project_root()?;
     let vendor_path = root.join("whisper-cpp-plus-sys/whisper.cpp");
 
     let mut config = cmake::Config::new(&vendor_path);
     config
-        .profile(if profile == "debug" { "Debug" } else { "Release" })
+        .profile(if profile == "debug" {
+            "Debug"
+        } else {
+            "Release"
+        })
         .define("BUILD_SHARED_LIBS", "OFF")
         .define("WHISPER_BUILD_TESTS", "OFF")
         .define("WHISPER_BUILD_EXAMPLES", "OFF")
@@ -169,18 +165,17 @@ fn build_whisper_cpp(
 }
 
 /// Copy CMake-produced static libs from the build destination to the output directory.
-fn copy_built_libs(
-    cmake_dest: &Path,
-    output_dir: &Path,
-    target: &str,
-    cuda: bool,
-) -> Result<()> {
+fn copy_built_libs(cmake_dest: &Path, output_dir: &Path, target: &str, cuda: bool) -> Result<()> {
     let ext = if target.contains("windows") {
         "lib"
     } else {
         "a"
     };
-    let prefix = if target.contains("windows") { "" } else { "lib" };
+    let prefix = if target.contains("windows") {
+        ""
+    } else {
+        "lib"
+    };
 
     let mut libs = vec!["whisper", "ggml", "ggml-base", "ggml-cpu"];
     if cuda {
@@ -202,14 +197,14 @@ fn copy_built_libs(
         if let Some(src_path) = found {
             let dest_path = output_dir.join(&filename);
             fs::copy(src_path, &dest_path).with_context(|| {
-                format!("Failed to copy {} to {}", src_path.display(), dest_path.display())
+                format!(
+                    "Failed to copy {} to {}",
+                    src_path.display(),
+                    dest_path.display()
+                )
             })?;
             let size = fs::metadata(&dest_path)?.len();
-            println!(
-                "  {} ({:.2} MB)",
-                filename,
-                size as f64 / 1_048_576.0
-            );
+            println!("  {} ({:.2} MB)", filename, size as f64 / 1_048_576.0);
         } else {
             println!("  [warn] {} not found in build output", filename);
         }
@@ -321,7 +316,10 @@ fn info() -> Result<()> {
 
 fn test_setup(force: bool) -> Result<()> {
     let root = project_root()?;
-    let models_dir = root.join("whisper-cpp-plus-sys").join("whisper.cpp").join("models");
+    let models_dir = root
+        .join("whisper-cpp-plus-sys")
+        .join("whisper.cpp")
+        .join("models");
 
     println!("Setting up test models in {}", models_dir.display());
     println!();
@@ -388,8 +386,7 @@ fn test_setup(force: bool) -> Result<()> {
 }
 
 fn project_root() -> Result<PathBuf> {
-    let manifest_dir =
-        env::var("CARGO_MANIFEST_DIR").context("CARGO_MANIFEST_DIR not set")?;
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").context("CARGO_MANIFEST_DIR not set")?;
 
     let root = Path::new(&manifest_dir)
         .parent()

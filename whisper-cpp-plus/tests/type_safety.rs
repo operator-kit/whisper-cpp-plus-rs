@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::thread;
-use whisper_cpp_plus::{WhisperContext, WhisperState, TranscriptionParams, FullParams, SamplingStrategy};
+use whisper_cpp_plus::{
+    FullParams, SamplingStrategy, TranscriptionParams, WhisperContext, WhisperState,
+};
 
 // Test that WhisperContext is Send + Sync
 fn assert_send<T: Send>() {}

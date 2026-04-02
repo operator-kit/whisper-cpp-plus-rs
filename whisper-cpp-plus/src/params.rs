@@ -147,7 +147,6 @@ impl FullParams {
         self
     }
 
-
     pub fn debug_mode(mut self, debug_mode: bool) -> Self {
         self.inner.debug_mode = debug_mode;
         self

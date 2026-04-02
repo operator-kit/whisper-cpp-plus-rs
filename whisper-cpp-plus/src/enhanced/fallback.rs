@@ -2,10 +2,10 @@
 //!
 //! This module implements quality-based retry logic inspired by faster-whisper
 
-use crate::{WhisperState, FullParams, Result, WhisperError, Segment, TranscriptionResult};
-use std::io::Write;
-use flate2::Compression;
+use crate::{FullParams, Result, Segment, TranscriptionResult, WhisperError, WhisperState};
 use flate2::write::ZlibEncoder;
+use flate2::Compression;
+use std::io::Write;
 use whisper_cpp_plus_sys as ffi;
 
 /// Quality thresholds for transcription validation
@@ -168,10 +168,7 @@ impl<'a> EnhancedWhisperState<'a> {
     fn get_no_speech_prob(&self, segment_idx: i32) -> f32 {
         unsafe {
             // Direct FFI call using the exposed ptr
-            ffi::whisper_full_get_segment_no_speech_prob_from_state(
-                self.state.ptr,
-                segment_idx
-            )
+            ffi::whisper_full_get_segment_no_speech_prob_from_state(self.state.ptr, segment_idx)
         }
     }
 
@@ -291,10 +288,12 @@ impl<'a> EnhancedWhisperState<'a> {
 
         // All temperatures failed, select best attempt
         let best_attempt = if !below_cr_attempts.is_empty() {
-            below_cr_attempts.into_iter()
+            below_cr_attempts
+                .into_iter()
                 .max_by(|a, b| a.avg_logprob.partial_cmp(&b.avg_logprob).unwrap())
         } else {
-            all_attempts.into_iter()
+            all_attempts
+                .into_iter()
                 .max_by(|a, b| a.avg_logprob.partial_cmp(&b.avg_logprob).unwrap())
         };
 
@@ -303,9 +302,11 @@ impl<'a> EnhancedWhisperState<'a> {
                 text: a.text,
                 segments: a.segments,
             })
-            .ok_or_else(|| WhisperError::TranscriptionError(
-                "Failed to produce acceptable transcription with any temperature".into()
-            ))
+            .ok_or_else(|| {
+                WhisperError::TranscriptionError(
+                    "Failed to produce acceptable transcription with any temperature".into(),
+                )
+            })
     }
 }
 
@@ -364,8 +365,7 @@ mod tests {
 
     #[test]
     fn test_enhanced_params_from_base() {
-        let base = FullParams::default()
-            .language("en");
+        let base = FullParams::default().language("en");
 
         let enhanced = EnhancedTranscriptionParams::from_base(base);
 

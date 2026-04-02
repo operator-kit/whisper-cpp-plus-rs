@@ -1,8 +1,8 @@
 //! Benchmarks for temperature fallback mechanism
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use whisper_cpp_plus::enhanced::fallback::calculate_compression_ratio;
 use std::time::Duration;
+use whisper_cpp_plus::enhanced::fallback::calculate_compression_ratio;
 
 fn benchmark_compression_ratio(c: &mut Criterion) {
     let mut group = c.benchmark_group("compression_ratio");
@@ -38,7 +38,7 @@ fn benchmark_compression_ratio(c: &mut Criterion) {
 }
 
 fn benchmark_quality_checks(c: &mut Criterion) {
-    use whisper_cpp_plus::enhanced::fallback::{TranscriptionAttempt, QualityThresholds};
+    use whisper_cpp_plus::enhanced::fallback::{QualityThresholds, TranscriptionAttempt};
 
     let mut group = c.benchmark_group("quality_checks");
 
@@ -96,14 +96,19 @@ fn benchmark_quality_checks(c: &mut Criterion) {
 fn find_whisper_model() -> Option<String> {
     if let Ok(dir) = std::env::var("WHISPER_TEST_MODEL_DIR") {
         let p = format!("{}/ggml-base.en.bin", dir);
-        if std::path::Path::new(&p).exists() { return Some(p); }
+        if std::path::Path::new(&p).exists() {
+            return Some(p);
+        }
     }
     let paths = [
         "tests/models/ggml-base.en.bin",
         "../whisper-cpp-plus-sys/whisper.cpp/models/ggml-base.en.bin",
         "whisper-cpp-plus-sys/whisper.cpp/models/ggml-base.en.bin",
     ];
-    paths.iter().find(|p| std::path::Path::new(p).exists()).map(|s| s.to_string())
+    paths
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .map(|s| s.to_string())
 }
 
 fn benchmark_transcription_with_fallback_simulation(c: &mut Criterion) {
@@ -115,8 +120,8 @@ fn benchmark_transcription_with_fallback_simulation(c: &mut Criterion) {
     }
     let model_path = model_path.unwrap();
 
-    use whisper_cpp_plus::{WhisperContext, TranscriptionParams};
     use std::sync::Arc;
+    use whisper_cpp_plus::{TranscriptionParams, WhisperContext};
 
     let ctx = Arc::new(WhisperContext::new(&model_path).unwrap());
 
@@ -125,23 +130,25 @@ fn benchmark_transcription_with_fallback_simulation(c: &mut Criterion) {
 
     // Load real audio for benchmarks
     let audio = load_benchmark_audio().unwrap_or_else(|e| {
-        eprintln!("Failed to load audio: {}. Skipping transcription benchmarks.", e);
+        eprintln!(
+            "Failed to load audio: {}. Skipping transcription benchmarks.",
+            e
+        );
         vec![0.0f32; 16000] // Fallback to minimal audio
     });
 
     // Create noisy version for comparison
     let noisy_audio = add_noise_to_audio(&audio);
 
-    let params = TranscriptionParams::builder()
-        .language("en")
-        .build();
+    let params = TranscriptionParams::builder().language("en").build();
 
     // Benchmark standard transcription (no fallback)
     group.bench_function("standard_clear", |b| {
         let ctx = Arc::clone(&ctx);
         let audio = audio.clone();
         b.iter(|| {
-            ctx.transcribe_with_params(black_box(&audio), params.clone()).unwrap()
+            ctx.transcribe_with_params(black_box(&audio), params.clone())
+                .unwrap()
         })
     });
 
@@ -149,7 +156,8 @@ fn benchmark_transcription_with_fallback_simulation(c: &mut Criterion) {
         let ctx = Arc::clone(&ctx);
         let audio = noisy_audio.clone();
         b.iter(|| {
-            ctx.transcribe_with_params(black_box(&audio), params.clone()).unwrap()
+            ctx.transcribe_with_params(black_box(&audio), params.clone())
+                .unwrap()
         })
     });
 
@@ -158,7 +166,8 @@ fn benchmark_transcription_with_fallback_simulation(c: &mut Criterion) {
         let ctx = Arc::clone(&ctx);
         let audio = audio.clone();
         b.iter(|| {
-            ctx.transcribe_with_params_enhanced(black_box(&audio), params.clone()).unwrap()
+            ctx.transcribe_with_params_enhanced(black_box(&audio), params.clone())
+                .unwrap()
         })
     });
 
@@ -166,7 +175,8 @@ fn benchmark_transcription_with_fallback_simulation(c: &mut Criterion) {
         let ctx = Arc::clone(&ctx);
         let audio = noisy_audio.clone();
         b.iter(|| {
-            ctx.transcribe_with_params_enhanced(black_box(&audio), params.clone()).unwrap()
+            ctx.transcribe_with_params_enhanced(black_box(&audio), params.clone())
+                .unwrap()
         })
     });
 
@@ -204,7 +214,10 @@ fn load_wav_file(path: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     let spec = reader.spec();
 
     if spec.sample_rate != 16000 {
-        eprintln!("Warning: Audio sample rate is {}Hz, expected 16000Hz", spec.sample_rate);
+        eprintln!(
+            "Warning: Audio sample rate is {}Hz, expected 16000Hz",
+            spec.sample_rate
+        );
     }
 
     let samples: Vec<f32> = reader
@@ -224,12 +237,16 @@ fn add_noise_to_audio(audio: &[f32]) -> Vec<f32> {
 
     let mut rng = RandomState::new().build_hasher();
 
-    audio.iter().enumerate().map(|(i, &sample)| {
-        i.hash(&mut rng);
-        let noise_val = (rng.finish() as f32 / u64::MAX as f32 - 0.5) * 0.1;
-        let noisy = sample + noise_val;
-        noisy.max(-1.0).min(1.0)
-    }).collect()
+    audio
+        .iter()
+        .enumerate()
+        .map(|(i, &sample)| {
+            i.hash(&mut rng);
+            let noise_val = (rng.finish() as f32 / u64::MAX as f32 - 0.5) * 0.1;
+            let noisy = sample + noise_val;
+            noisy.max(-1.0).min(1.0)
+        })
+        .collect()
 }
 
 criterion_group!(

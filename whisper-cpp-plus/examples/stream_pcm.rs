@@ -10,8 +10,8 @@ use whisper_cpp_plus::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let model_path = find_model("ggml-tiny.en.bin")
-        .ok_or("Model not found. Run: cargo xtask test-setup")?;
+    let model_path =
+        find_model("ggml-tiny.en.bin").ok_or("Model not found. Run: cargo xtask test-setup")?;
 
     println!("Loading model from {:?}...", model_path);
     let ctx = WhisperContext::new(&model_path)?;
@@ -123,7 +123,9 @@ fn find_model(name: &str) -> Option<PathBuf> {
     for env_var in ["WHISPER_TEST_MODEL_DIR", "WHISPER_MODEL_PATH"] {
         if let Ok(dir) = std::env::var(env_var) {
             let path = Path::new(&dir).join(name);
-            if path.exists() { return Some(path); }
+            if path.exists() {
+                return Some(path);
+            }
         }
     }
     let paths = [
@@ -132,5 +134,8 @@ fn find_model(name: &str) -> Option<PathBuf> {
         format!("../whisper-cpp-plus-sys/whisper.cpp/models/{}", name),
         format!("whisper-cpp-plus-sys/whisper.cpp/models/{}", name),
     ];
-    paths.iter().find(|p| Path::new(p).exists()).map(PathBuf::from)
+    paths
+        .iter()
+        .find(|p| Path::new(p).exists())
+        .map(PathBuf::from)
 }

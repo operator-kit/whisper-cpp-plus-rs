@@ -65,24 +65,20 @@ mod async_api;
 
 pub use context::WhisperContext;
 pub use error::{Result, WhisperError};
-pub use params::{
-    FullParams, SamplingStrategy, TranscriptionParams, TranscriptionParamsBuilder,
-};
+pub use params::{FullParams, SamplingStrategy, TranscriptionParams, TranscriptionParamsBuilder};
+#[cfg(feature = "quantization")]
+pub use quantize::{QuantizationType, QuantizeError, WhisperQuantize};
 pub use state::{Segment, TranscriptionResult, WhisperState};
 pub use stream::{WhisperStream, WhisperStreamConfig};
 pub use stream_pcm::{
-    PcmFormat, PcmReader, PcmReaderConfig, WhisperStreamPcm, WhisperStreamPcmConfig, vad_simple,
+    vad_simple, PcmFormat, PcmReader, PcmReaderConfig, WhisperStreamPcm, WhisperStreamPcmConfig,
 };
-pub use vad::{
-    VadContextParams, VadParams, VadParamsBuilder, WhisperVadProcessor, VadSegments,
-};
-#[cfg(feature = "quantization")]
-pub use quantize::{WhisperQuantize, QuantizationType, QuantizeError};
+pub use vad::{VadContextParams, VadParams, VadParamsBuilder, VadSegments, WhisperVadProcessor};
 
 // Re-export for benchmarks
 #[doc(hidden)]
 pub mod bench_helpers {
-    pub use crate::vad::{WhisperVadProcessor, VadParams};
+    pub use crate::vad::{VadParams, WhisperVadProcessor};
 }
 
 #[cfg(feature = "async")]
@@ -257,7 +253,6 @@ impl WhisperContext {
         enhanced_state.transcribe_with_fallback(enhanced_params, audio)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

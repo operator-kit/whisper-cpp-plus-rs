@@ -5,8 +5,8 @@ mod common;
 use common::TestModels;
 use std::path::Path;
 use whisper_cpp_plus::{
-    FullParams, PcmFormat, PcmReader, PcmReaderConfig, SamplingStrategy, WhisperStreamPcm,
-    WhisperStreamPcmConfig, WhisperContext,
+    FullParams, PcmFormat, PcmReader, PcmReaderConfig, SamplingStrategy, WhisperContext,
+    WhisperStreamPcm, WhisperStreamPcmConfig,
 };
 
 /// Load a WAV file, return raw PCM bytes in the given format + the f32 sample count.
@@ -25,10 +25,7 @@ fn wav_to_raw_pcm(path: &Path, format: PcmFormat) -> (Vec<u8>, usize) {
     };
 
     let mono = if spec.channels == 2 {
-        samples
-            .chunks(2)
-            .map(|c| (c[0] + c[1]) / 2.0)
-            .collect()
+        samples.chunks(2).map(|c| (c[0] + c[1]) / 2.0).collect()
     } else {
         samples
     };
@@ -117,7 +114,10 @@ fn test_stream_pcm_fixed_step_f32() {
         })
         .expect("WhisperStreamPcm::run failed");
 
-    assert!(!all_text.is_empty(), "Should produce non-empty transcription");
+    assert!(
+        !all_text.is_empty(),
+        "Should produce non-empty transcription"
+    );
     check_jfk_keywords(&all_text);
 }
 
@@ -170,7 +170,10 @@ fn test_stream_pcm_fixed_step_s16() {
         })
         .expect("WhisperStreamPcm::run failed");
 
-    assert!(!all_text.is_empty(), "Should produce non-empty transcription");
+    assert!(
+        !all_text.is_empty(),
+        "Should produce non-empty transcription"
+    );
     check_jfk_keywords(&all_text);
 }
 
@@ -190,8 +193,7 @@ fn test_stream_pcm_vad_simple() {
     let (raw_bytes, _) = wav_to_raw_pcm(&jfk_path, PcmFormat::F32);
 
     let ctx = WhisperContext::new(&model_path).unwrap();
-    let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
-        .language("en");
+    let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
 
     let reader = PcmReader::new(
         Box::new(std::io::Cursor::new(raw_bytes)),
@@ -220,10 +222,7 @@ fn test_stream_pcm_vad_simple() {
     stream
         .run(|segments, start_ms, end_ms| {
             segment_count += 1;
-            println!(
-                "VAD segment {}: {}ms-{}ms",
-                segment_count, start_ms, end_ms
-            );
+            println!("VAD segment {}: {}ms-{}ms", segment_count, start_ms, end_ms);
             for seg in segments {
                 all_text.push_str(&seg.text);
                 all_text.push(' ');
@@ -233,7 +232,10 @@ fn test_stream_pcm_vad_simple() {
 
     println!("VAD produced {} transcription segments", segment_count);
     assert!(segment_count > 0, "VAD should produce at least 1 segment");
-    assert!(!all_text.is_empty(), "Should produce non-empty transcription");
+    assert!(
+        !all_text.is_empty(),
+        "Should produce non-empty transcription"
+    );
     check_jfk_keywords(&all_text);
 }
 
@@ -258,8 +260,7 @@ fn test_stream_pcm_vad_silero() {
 
     let ctx = WhisperContext::new(&model_path).unwrap();
     let vad = whisper_cpp_plus::WhisperVadProcessor::new(&vad_model_path).unwrap();
-    let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
-        .language("en");
+    let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
 
     let reader = PcmReader::new(
         Box::new(std::io::Cursor::new(raw_bytes)),
@@ -300,6 +301,9 @@ fn test_stream_pcm_vad_silero() {
 
     println!("Silero VAD produced {} segments", segment_count);
     assert!(segment_count > 0, "Silero VAD should produce >= 1 segment");
-    assert!(!all_text.is_empty(), "Should produce non-empty transcription");
+    assert!(
+        !all_text.is_empty(),
+        "Should produce non-empty transcription"
+    );
     check_jfk_keywords(&all_text);
 }

@@ -5,17 +5,18 @@
 //! 2. Stream reuse across multiple sessions via .reset()
 
 use std::path::{Path, PathBuf};
-use whisper_cpp_plus::{FullParams, SamplingStrategy, WhisperContext, WhisperStream, WhisperStreamConfig};
+use whisper_cpp_plus::{
+    FullParams, SamplingStrategy, WhisperContext, WhisperStream, WhisperStreamConfig,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let model_path = find_model("ggml-tiny.en.bin")
-        .ok_or("Model not found. Run: cargo xtask test-setup")?;
+    let model_path =
+        find_model("ggml-tiny.en.bin").ok_or("Model not found. Run: cargo xtask test-setup")?;
 
     println!("Loading model from {:?}...", model_path);
     let ctx = WhisperContext::new(&model_path)?;
 
-    let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
-        .language("en");
+    let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
 
     let config = WhisperStreamConfig {
         step_ms: 3000,
@@ -30,13 +31,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load audio
     let audio = load_audio()?;
-    println!("Loaded {} samples ({:.1}s)", audio.len(), audio.len() as f64 / 16000.0);
+    println!(
+        "Loaded {} samples ({:.1}s)",
+        audio.len(),
+        audio.len() as f64 / 16000.0
+    );
 
     // Feed in 1-second chunks to simulate real-time
     let chunk_size = 16000;
     for (i, chunk) in audio.chunks(chunk_size).enumerate() {
         stream.feed_audio(chunk);
-        println!("Fed chunk {} ({} samples, buf={})", i + 1, chunk.len(), stream.buffer_size());
+        println!(
+            "Fed chunk {} ({} samples, buf={})",
+            i + 1,
+            chunk.len(),
+            stream.buffer_size()
+        );
 
         // Process any ready steps
         while let Some(segments) = stream.process_step()? {
@@ -62,7 +72,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    println!("Done. Processed {} samples total.", stream.processed_samples());
+    println!(
+        "Done. Processed {} samples total.",
+        stream.processed_samples()
+    );
 
     // === Part 2: Stream reuse across sessions ===
     println!("\n=== Stream Reuse Demo ===\n");
@@ -80,7 +93,7 @@ fn demo_stream_reuse(ctx: &WhisperContext) -> Result<(), Box<dyn std::error::Err
         println!("--- Session {} ---", session);
 
         if session > 1 {
-            stream.reset();  // Reuse stream without recreating context
+            stream.reset(); // Reuse stream without recreating context
             println!("  (reset — state reused)");
         }
 
@@ -90,13 +103,23 @@ fn demo_stream_reuse(ctx: &WhisperContext) -> Result<(), Box<dyn std::error::Err
 
         while let Some(segments) = stream.process_step()? {
             for seg in &segments {
-                println!("  [{:.2}s-{:.2}s]: {}", seg.start_seconds(), seg.end_seconds(), seg.text);
+                println!(
+                    "  [{:.2}s-{:.2}s]: {}",
+                    seg.start_seconds(),
+                    seg.end_seconds(),
+                    seg.text
+                );
             }
         }
 
         let flush_segs = stream.flush()?;
         for seg in &flush_segs {
-            println!("  [flush {:.2}s-{:.2}s]: {}", seg.start_seconds(), seg.end_seconds(), seg.text);
+            println!(
+                "  [flush {:.2}s-{:.2}s]: {}",
+                seg.start_seconds(),
+                seg.end_seconds(),
+                seg.text
+            );
         }
 
         println!("  processed: {} samples\n", stream.processed_samples());
@@ -115,7 +138,11 @@ fn load_audio() -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     // Check env var first
     let path = if let Ok(dir) = std::env::var("WHISPER_TEST_AUDIO_DIR") {
         let p = format!("{}/jfk.wav", dir);
-        if Path::new(&p).exists() { Some(p) } else { None }
+        if Path::new(&p).exists() {
+            Some(p)
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -126,7 +153,10 @@ fn load_audio() -> Result<Vec<f32>, Box<dyn std::error::Error>> {
             "whisper-cpp-plus-sys/whisper.cpp/samples/jfk.wav",
             "samples/audio.wav",
         ];
-        paths.iter().find(|p| Path::new(p).exists()).map(|s| s.to_string())
+        paths
+            .iter()
+            .find(|p| Path::new(p).exists())
+            .map(|s| s.to_string())
     });
 
     let path = path.ok_or("No audio file found. Set WHISPER_TEST_AUDIO_DIR.")?;
@@ -152,7 +182,9 @@ fn find_model(name: &str) -> Option<PathBuf> {
     for env_var in ["WHISPER_TEST_MODEL_DIR", "WHISPER_MODEL_PATH"] {
         if let Ok(dir) = std::env::var(env_var) {
             let path = Path::new(&dir).join(name);
-            if path.exists() { return Some(path); }
+            if path.exists() {
+                return Some(path);
+            }
         }
     }
     let paths = [
@@ -161,5 +193,8 @@ fn find_model(name: &str) -> Option<PathBuf> {
         format!("../whisper-cpp-plus-sys/whisper.cpp/models/{}", name),
         format!("whisper-cpp-plus-sys/whisper.cpp/models/{}", name),
     ];
-    paths.iter().find(|p| Path::new(p).exists()).map(PathBuf::from)
+    paths
+        .iter()
+        .find(|p| Path::new(p).exists())
+        .map(PathBuf::from)
 }

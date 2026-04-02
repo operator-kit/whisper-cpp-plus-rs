@@ -77,9 +77,7 @@ extern "C" {
     /// # Returns
     /// - The GGML_FTYPE_* constant representing the model's quantization
     /// - -1 on error (file not found or invalid model)
-    pub fn whisper_model_get_ftype(
-        fname: *const ::std::os::raw::c_char,
-    ) -> ::std::os::raw::c_int;
+    pub fn whisper_model_get_ftype(fname: *const ::std::os::raw::c_char) -> ::std::os::raw::c_int;
 }
 
 #[cfg(test)]

@@ -99,12 +99,9 @@ impl WhisperStream {
         config.length_ms = config.length_ms.max(config.step_ms);
 
         // Sample counts
-        let n_samples_step =
-            (1e-3 * config.step_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
-        let n_samples_len =
-            (1e-3 * config.length_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
-        let n_samples_keep =
-            (1e-3 * config.keep_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
+        let n_samples_step = (1e-3 * config.step_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
+        let n_samples_len = (1e-3 * config.length_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
+        let n_samples_keep = (1e-3 * config.keep_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
 
         // Mode detection
         let use_vad = n_samples_step == 0; // step_ms <= 0 → VAD
@@ -180,9 +177,10 @@ impl WhisperStream {
 
         // Exact formula from stream.cpp line 279:
         // n_samples_take = min(pcmf32_old.size(), max(0, n_samples_keep + n_samples_len - n_samples_new))
-        let n_samples_take = self.pcmf32_old.len().min(
-            (self.n_samples_keep + self.n_samples_len).saturating_sub(n_samples_new),
-        );
+        let n_samples_take = self
+            .pcmf32_old
+            .len()
+            .min((self.n_samples_keep + self.n_samples_len).saturating_sub(n_samples_new));
 
         // Build pcmf32: tail of pcmf32_old + pcmf32_new
         let mut pcmf32 = Vec::with_capacity(n_samples_take + n_samples_new);
@@ -204,8 +202,7 @@ impl WhisperStream {
         if self.n_iter % self.n_new_line == 0 {
             // Keep only last n_samples_keep samples
             if self.n_samples_keep > 0 && pcmf32.len() >= self.n_samples_keep {
-                self.pcmf32_old =
-                    pcmf32[pcmf32.len() - self.n_samples_keep..].to_vec();
+                self.pcmf32_old = pcmf32[pcmf32.len() - self.n_samples_keep..].to_vec();
             } else {
                 self.pcmf32_old.clear();
             }
@@ -308,8 +305,7 @@ impl WhisperStream {
         for i in 0..n_segments {
             let token_count = self.state.full_n_tokens(i);
             for j in 0..token_count {
-                self.prompt_tokens
-                    .push(self.state.full_get_token_id(i, j));
+                self.prompt_tokens.push(self.state.full_get_token_id(i, j));
             }
         }
     }
@@ -335,8 +331,7 @@ impl WhisperStream {
             if !self.use_vad {
                 // Build final buffer with overlap
                 let n_samples_take = self.pcmf32_old.len().min(
-                    (self.n_samples_keep + self.n_samples_len)
-                        .saturating_sub(remaining.len()),
+                    (self.n_samples_keep + self.n_samples_len).saturating_sub(remaining.len()),
                 );
                 let mut pcmf32 = Vec::with_capacity(n_samples_take + remaining.len());
                 if n_samples_take > 0 && !self.pcmf32_old.is_empty() {
@@ -522,9 +517,12 @@ mod tests {
         // step_ms <= 0 → use_vad
         let step_ms_values = [0, -1, -100];
         for step_ms in step_ms_values {
-            let n_samples_step =
-                (1e-3 * step_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
-            assert_eq!(n_samples_step, 0, "step_ms={} should yield 0 samples", step_ms);
+            let n_samples_step = (1e-3 * step_ms as f64 * WHISPER_SAMPLE_RATE as f64) as usize;
+            assert_eq!(
+                n_samples_step, 0,
+                "step_ms={} should yield 0 samples",
+                step_ms
+            );
         }
 
         // step_ms > 0 → fixed step
@@ -604,8 +602,7 @@ mod tests {
         }
 
         let ctx = WhisperContext::new(model_path).unwrap();
-        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
-            .language("en");
+        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
 
         // Use a small step for testing
         let config = WhisperStreamConfig {
@@ -622,7 +619,10 @@ mod tests {
         stream.feed_audio(&audio);
 
         let result = stream.process_step().unwrap();
-        assert!(result.is_some(), "Should produce segments with enough audio");
+        assert!(
+            result.is_some(),
+            "Should produce segments with enough audio"
+        );
         assert!(stream.processed_samples() > 0);
     }
 
@@ -635,8 +635,7 @@ mod tests {
         }
 
         let ctx = WhisperContext::new(model_path).unwrap();
-        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
-            .language("en");
+        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
 
         let config = WhisperStreamConfig {
             step_ms: 3000,

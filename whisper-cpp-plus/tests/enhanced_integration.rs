@@ -1,8 +1,8 @@
 mod common;
 
 use common::TestModels;
-use whisper_cpp_plus::enhanced::vad::{EnhancedVadParams, EnhancedWhisperVadProcessor};
 use whisper_cpp_plus::enhanced::fallback::{EnhancedTranscriptionParams, EnhancedWhisperState};
+use whisper_cpp_plus::enhanced::vad::{EnhancedVadParams, EnhancedWhisperVadProcessor};
 use whisper_cpp_plus::{FullParams, SamplingStrategy, WhisperContext};
 
 #[test]
@@ -25,7 +25,9 @@ fn test_enhanced_vad_with_real_audio() {
 
     let mut processor = EnhancedWhisperVadProcessor::new(&vad_model).unwrap();
     let params = EnhancedVadParams::default();
-    let chunks = processor.process_with_aggregation(&samples, &params).unwrap();
+    let chunks = processor
+        .process_with_aggregation(&samples, &params)
+        .unwrap();
 
     // JFK audio has speech — should produce at least one chunk
     assert!(!chunks.is_empty(), "Expected speech chunks from jfk.wav");
@@ -63,14 +65,18 @@ fn test_enhanced_vad_aggregation_merges_segments() {
         min_gap_ms: 500,
         ..Default::default()
     };
-    let merged = processor.process_with_aggregation(&samples, &merged_params).unwrap();
+    let merged = processor
+        .process_with_aggregation(&samples, &merged_params)
+        .unwrap();
 
     // Without merging
     let unmerged_params = EnhancedVadParams {
         merge_segments: false,
         ..Default::default()
     };
-    let unmerged = processor.process_with_aggregation(&samples, &unmerged_params).unwrap();
+    let unmerged = processor
+        .process_with_aggregation(&samples, &unmerged_params)
+        .unwrap();
 
     // Merged should have fewer or equal segments
     assert!(
@@ -101,8 +107,7 @@ fn test_temperature_fallback_transcription() {
     let ctx = WhisperContext::new(&model_path).unwrap();
     let mut state = ctx.create_state().unwrap();
 
-    let base_params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
-        .language("en");
+    let base_params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
     let enhanced_params = EnhancedTranscriptionParams::from_base(base_params);
 
     let mut enhanced_state = EnhancedWhisperState::new(&mut state);
@@ -146,7 +151,9 @@ fn test_enhanced_transcription_via_context() {
         .language("en")
         .build();
 
-    let result = ctx.transcribe_with_params_enhanced(&samples, params).unwrap();
+    let result = ctx
+        .transcribe_with_params_enhanced(&samples, params)
+        .unwrap();
 
     assert!(!result.text.is_empty());
     assert!(!result.segments.is_empty());

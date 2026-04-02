@@ -4,8 +4,8 @@
 //! inspired by faster-whisper's optimizations. VAD is a preprocessing step that happens
 //! BEFORE transcription, not part of the transcription API itself.
 
-use crate::vad::{WhisperVadProcessor, VadParams};
 use crate::error::Result;
+use crate::vad::{VadParams, WhisperVadProcessor};
 use std::path::Path;
 
 /// Enhanced VAD parameters with aggregation settings
@@ -220,8 +220,8 @@ mod tests {
 
         let segments = vec![
             (0.0, 2.0),
-            (2.1, 4.0),  // Small gap - should merge
-            (4.5, 6.0),  // Larger gap
+            (2.1, 4.0),   // Small gap - should merge
+            (4.5, 6.0),   // Larger gap
             (10.0, 12.0), // Large gap - separate segment
         ];
 

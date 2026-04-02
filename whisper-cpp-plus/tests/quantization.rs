@@ -6,7 +6,7 @@ mod common;
 
 use common::TestModels;
 use std::fs;
-use whisper_cpp_plus::{WhisperQuantize, QuantizationType};
+use whisper_cpp_plus::{QuantizationType, WhisperQuantize};
 
 #[test]
 fn test_quantization_types() {
@@ -27,19 +27,38 @@ fn test_quantization_types() {
         assert!(!qtype.name().is_empty());
 
         let factor = qtype.size_factor();
-        assert!(factor > 0.0 && factor < 1.0,
-            "{} has invalid size factor: {}", qtype, factor);
+        assert!(
+            factor > 0.0 && factor < 1.0,
+            "{} has invalid size factor: {}",
+            qtype,
+            factor
+        );
     }
 }
 
 #[test]
 fn test_quantization_type_parsing() {
-    assert_eq!("Q4_0".parse::<QuantizationType>().unwrap(), QuantizationType::Q4_0);
-    assert_eq!("q4_0".parse::<QuantizationType>().unwrap(), QuantizationType::Q4_0);
-    assert_eq!("Q40".parse::<QuantizationType>().unwrap(), QuantizationType::Q4_0);
+    assert_eq!(
+        "Q4_0".parse::<QuantizationType>().unwrap(),
+        QuantizationType::Q4_0
+    );
+    assert_eq!(
+        "q4_0".parse::<QuantizationType>().unwrap(),
+        QuantizationType::Q4_0
+    );
+    assert_eq!(
+        "Q40".parse::<QuantizationType>().unwrap(),
+        QuantizationType::Q4_0
+    );
 
-    assert_eq!("Q5_K".parse::<QuantizationType>().unwrap(), QuantizationType::Q5_K);
-    assert_eq!("q5k".parse::<QuantizationType>().unwrap(), QuantizationType::Q5_K);
+    assert_eq!(
+        "Q5_K".parse::<QuantizationType>().unwrap(),
+        QuantizationType::Q5_K
+    );
+    assert_eq!(
+        "q5k".parse::<QuantizationType>().unwrap(),
+        QuantizationType::Q5_K
+    );
 
     assert!("invalid".parse::<QuantizationType>().is_err());
     assert!("".parse::<QuantizationType>().is_err());
@@ -72,8 +91,12 @@ fn test_quantize_model() {
 
     let input_size = fs::metadata(&model_path).unwrap().len();
     let output_size = fs::metadata(&output_path).unwrap().len();
-    assert!(output_size < input_size,
-        "Quantized model should be smaller: {} >= {}", output_size, input_size);
+    assert!(
+        output_size < input_size,
+        "Quantized model should be smaller: {} >= {}",
+        output_size,
+        input_size
+    );
 
     let _ = fs::remove_file(&output_path);
 }
@@ -99,7 +122,11 @@ fn test_quantize_with_progress() {
         output_path.to_str().unwrap(),
         QuantizationType::Q4_0,
         move |progress| {
-            assert!(progress >= 0.0 && progress <= 1.0, "Invalid progress value: {}", progress);
+            assert!(
+                progress >= 0.0 && progress <= 1.0,
+                "Invalid progress value: {}",
+                progress
+            );
             call_count_clone.fetch_add(1, Ordering::Relaxed);
         },
     );
@@ -110,8 +137,11 @@ fn test_quantize_with_progress() {
     let total_calls = call_count.load(Ordering::Relaxed);
     // Per-tensor progress: should fire many more than 2 times
     // (tiny model has ~50+ tensors, plus the initial 0.0 callback)
-    assert!(total_calls > 2,
-        "Expected per-tensor progress (>2 calls), got {} calls", total_calls);
+    assert!(
+        total_calls > 2,
+        "Expected per-tensor progress (>2 calls), got {} calls",
+        total_calls
+    );
     eprintln!("Progress callback fired {} times", total_calls);
 
     let _ = fs::remove_file(&output_path);
@@ -143,10 +173,16 @@ fn test_estimate_quantized_size() {
     let original_size = fs::metadata(&model_path).unwrap().len();
 
     for qtype in QuantizationType::all() {
-        let estimated = WhisperQuantize::estimate_quantized_size(model_path.to_str().unwrap(), *qtype).unwrap();
+        let estimated =
+            WhisperQuantize::estimate_quantized_size(model_path.to_str().unwrap(), *qtype).unwrap();
 
-        assert!(estimated < original_size,
-            "{} estimation {} >= original {}", qtype, estimated, original_size);
+        assert!(
+            estimated < original_size,
+            "{} estimation {} >= original {}",
+            qtype,
+            estimated,
+            original_size
+        );
 
         let expected = (original_size as f64 * qtype.size_factor() as f64) as u64;
         let diff = if estimated > expected {
@@ -156,9 +192,14 @@ fn test_estimate_quantized_size() {
         };
 
         let margin = (expected as f64 * 0.1) as u64;
-        assert!(diff < margin,
+        assert!(
+            diff < margin,
             "{}: estimated {} differs too much from expected {} (diff: {})",
-            qtype, estimated, expected, diff);
+            qtype,
+            estimated,
+            expected,
+            diff
+        );
     }
 }
 
@@ -174,9 +215,7 @@ fn test_error_handling() {
     let result = WhisperQuantize::get_model_quantization_type("non_existent.bin");
     assert!(result.is_err(), "Should fail with non-existent file");
 
-    let result = WhisperQuantize::estimate_quantized_size(
-        "non_existent.bin",
-        QuantizationType::Q5_0
-    );
+    let result =
+        WhisperQuantize::estimate_quantized_size("non_existent.bin", QuantizationType::Q5_0);
     assert!(result.is_err(), "Should fail with non-existent file");
 }

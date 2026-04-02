@@ -5,8 +5,12 @@
 
 #[cfg(feature = "async")]
 use crate::{
-    context::WhisperContext, error::Result, params::FullParams,
-    state::WhisperState, stream::{WhisperStreamConfig, WhisperStream}, Segment, TranscriptionResult,
+    context::WhisperContext,
+    error::Result,
+    params::FullParams,
+    state::WhisperState,
+    stream::{WhisperStream, WhisperStreamConfig},
+    Segment, TranscriptionResult,
 };
 #[cfg(feature = "async")]
 use std::sync::Arc;
@@ -67,10 +71,7 @@ enum AudioCommand {
 #[cfg(feature = "async")]
 impl AsyncWhisperStream {
     /// Create a new async streaming transcriber
-    pub fn new(
-        context: WhisperContext,
-        params: FullParams,
-    ) -> Result<Self> {
+    pub fn new(context: WhisperContext, params: FullParams) -> Result<Self> {
         Self::with_config(context, params, WhisperStreamConfig::default())
     }
 

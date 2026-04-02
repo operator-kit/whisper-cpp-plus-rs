@@ -103,7 +103,8 @@ impl WhisperState {
     }
 
     pub fn full_get_segment_text(&self, i_segment: i32) -> Result<String> {
-        let text_ptr = unsafe { ffi::whisper_full_get_segment_text_from_state(self.ptr, i_segment) };
+        let text_ptr =
+            unsafe { ffi::whisper_full_get_segment_text_from_state(self.ptr, i_segment) };
 
         if text_ptr.is_null() {
             return Err(WhisperError::InvalidContext);
@@ -122,9 +123,7 @@ impl WhisperState {
     }
 
     pub fn full_get_segment_speaker_turn_next(&self, i_segment: i32) -> bool {
-        unsafe {
-            ffi::whisper_full_get_segment_speaker_turn_next_from_state(self.ptr, i_segment)
-        }
+        unsafe { ffi::whisper_full_get_segment_speaker_turn_next_from_state(self.ptr, i_segment) }
     }
 
     pub fn full_n_tokens(&self, i_segment: i32) -> i32 {
@@ -133,7 +132,12 @@ impl WhisperState {
 
     pub fn full_get_token_text(&self, i_segment: i32, i_token: i32) -> Result<String> {
         let text_ptr = unsafe {
-            ffi::whisper_full_get_token_text_from_state(self._context.0, self.ptr, i_segment, i_token)
+            ffi::whisper_full_get_token_text_from_state(
+                self._context.0,
+                self.ptr,
+                i_segment,
+                i_token,
+            )
         };
 
         if text_ptr.is_null() {
@@ -153,9 +157,8 @@ impl WhisperState {
         i_segment: i32,
         i_token: i32,
     ) -> Option<ffi::whisper_token_data> {
-        let data = unsafe {
-            ffi::whisper_full_get_token_data_from_state(self.ptr, i_segment, i_token)
-        };
+        let data =
+            unsafe { ffi::whisper_full_get_token_data_from_state(self.ptr, i_segment, i_token) };
 
         if data.id == -1 {
             None

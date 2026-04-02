@@ -1,15 +1,15 @@
 //! Example demonstrating temperature fallback for improved transcription quality
 
 use std::path::{Path, PathBuf};
-use whisper_cpp_plus::{WhisperContext, TranscriptionParams, FullParams, SamplingStrategy};
 use whisper_cpp_plus::enhanced::fallback::{
-    EnhancedTranscriptionParams, EnhancedTranscriptionParamsBuilder,
-    QualityThresholds, EnhancedWhisperState
+    EnhancedTranscriptionParams, EnhancedTranscriptionParamsBuilder, EnhancedWhisperState,
+    QualityThresholds,
 };
+use whisper_cpp_plus::{FullParams, SamplingStrategy, TranscriptionParams, WhisperContext};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let model_path = find_model("ggml-tiny.en.bin")
-        .ok_or("Model not found. Run: cargo xtask test-setup")?;
+    let model_path =
+        find_model("ggml-tiny.en.bin").ok_or("Model not found. Run: cargo xtask test-setup")?;
 
     println!("Loading model from {:?}...", model_path);
     let ctx = WhisperContext::new(&model_path)?;
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn compare_transcription_methods(
     ctx: &WhisperContext,
-    audio: &[f32]
+    audio: &[f32],
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Standard transcription
     println!("1. Standard transcription:");
@@ -50,9 +50,7 @@ fn compare_transcription_methods(
 
     // Enhanced transcription with automatic fallback
     println!("\n2. Enhanced transcription with temperature fallback:");
-    let params = TranscriptionParams::builder()
-        .language("en")
-        .build();
+    let params = TranscriptionParams::builder().language("en").build();
 
     let start = std::time::Instant::now();
     let enhanced_result = ctx.transcribe_with_params_enhanced(audio, params)?;
@@ -69,25 +67,33 @@ fn compare_transcription_methods(
 
 fn demonstrate_custom_thresholds(
     ctx: &WhisperContext,
-    audio: &[f32]
+    audio: &[f32],
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Creating enhanced parameters with custom quality thresholds...");
 
     // Build custom enhanced parameters
-    let base_params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
-        .language("en");
+    let base_params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
 
     let enhanced_params = EnhancedTranscriptionParamsBuilder::new()
         .base_params(base_params)
         .temperatures(vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
-        .compression_ratio_threshold(Some(2.0))  // Stricter than default 2.4
-        .log_prob_threshold(Some(-0.5))          // Stricter than default -1.0
+        .compression_ratio_threshold(Some(2.0)) // Stricter than default 2.4
+        .log_prob_threshold(Some(-0.5)) // Stricter than default -1.0
         .build();
 
     println!("Quality thresholds:");
-    println!("  - Max compression ratio: {:?}", enhanced_params.thresholds.compression_ratio_threshold);
-    println!("  - Min log probability: {:?}", enhanced_params.thresholds.log_prob_threshold);
-    println!("  - Temperature sequence: {:?}", enhanced_params.temperatures);
+    println!(
+        "  - Max compression ratio: {:?}",
+        enhanced_params.thresholds.compression_ratio_threshold
+    );
+    println!(
+        "  - Min log probability: {:?}",
+        enhanced_params.thresholds.log_prob_threshold
+    );
+    println!(
+        "  - Temperature sequence: {:?}",
+        enhanced_params.temperatures
+    );
 
     // Transcribe with custom thresholds
     let mut state = ctx.create_state()?;
@@ -100,7 +106,8 @@ fn demonstrate_custom_thresholds(
     println!("  Segments: {}", result.segments.len());
 
     for (i, segment) in result.segments.iter().enumerate() {
-        println!("    Segment {}: [{:.2}s - {:.2}s] {}",
+        println!(
+            "    Segment {}: [{:.2}s - {:.2}s] {}",
             i + 1,
             segment.start_seconds(),
             segment.end_seconds(),
@@ -113,7 +120,7 @@ fn demonstrate_custom_thresholds(
 
 fn demonstrate_direct_enhanced_state(
     ctx: &WhisperContext,
-    audio: &[f32]
+    audio: &[f32],
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Using enhanced state directly for fine control...");
 
@@ -122,14 +129,14 @@ fn demonstrate_direct_enhanced_state(
 
     // Configure different quality thresholds for experimentation
     let relaxed_thresholds = QualityThresholds {
-        compression_ratio_threshold: Some(3.0),  // More relaxed
-        log_prob_threshold: Some(-2.0),          // More relaxed
+        compression_ratio_threshold: Some(3.0), // More relaxed
+        log_prob_threshold: Some(-2.0),         // More relaxed
         no_speech_threshold: Some(0.8),
     };
 
     let strict_thresholds = QualityThresholds {
-        compression_ratio_threshold: Some(1.5),  // Very strict
-        log_prob_threshold: Some(-0.3),          // Very strict
+        compression_ratio_threshold: Some(1.5), // Very strict
+        log_prob_threshold: Some(-0.3),         // Very strict
         no_speech_threshold: Some(0.4),
     };
 
@@ -207,13 +214,17 @@ fn add_noise_to_audio(audio: &[f32]) -> Vec<f32> {
 
     let mut rng = RandomState::new().build_hasher();
 
-    audio.iter().enumerate().map(|(i, &sample)| {
-        // Simple pseudo-random noise generation
-        i.hash(&mut rng);
-        let noise_val = (rng.finish() as f32 / u64::MAX as f32 - 0.5) * 0.15; // Lower noise level
-        let noisy = sample + noise_val;
-        noisy.max(-1.0).min(1.0) // Clip to valid range
-    }).collect()
+    audio
+        .iter()
+        .enumerate()
+        .map(|(i, &sample)| {
+            // Simple pseudo-random noise generation
+            i.hash(&mut rng);
+            let noise_val = (rng.finish() as f32 / u64::MAX as f32 - 0.5) * 0.15; // Lower noise level
+            let noisy = sample + noise_val;
+            noisy.max(-1.0).min(1.0) // Clip to valid range
+        })
+        .collect()
 }
 
 fn load_wav_file(path: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
@@ -224,11 +235,17 @@ fn load_wav_file(path: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
 
     // Check format
     if spec.sample_rate != 16000 {
-        eprintln!("Warning: Audio sample rate is {}Hz, expected 16000Hz", spec.sample_rate);
+        eprintln!(
+            "Warning: Audio sample rate is {}Hz, expected 16000Hz",
+            spec.sample_rate
+        );
     }
 
     if spec.channels != 1 {
-        eprintln!("Warning: Audio has {} channels, using first channel only", spec.channels);
+        eprintln!(
+            "Warning: Audio has {} channels, using first channel only",
+            spec.channels
+        );
     }
 
     let samples: Vec<f32> = reader
@@ -244,7 +261,9 @@ fn find_model(name: &str) -> Option<PathBuf> {
     for env_var in ["WHISPER_TEST_MODEL_DIR", "WHISPER_MODEL_PATH"] {
         if let Ok(dir) = std::env::var(env_var) {
             let path = Path::new(&dir).join(name);
-            if path.exists() { return Some(path); }
+            if path.exists() {
+                return Some(path);
+            }
         }
     }
     let paths = [
@@ -253,5 +272,8 @@ fn find_model(name: &str) -> Option<PathBuf> {
         format!("../whisper-cpp-plus-sys/whisper.cpp/models/{}", name),
         format!("whisper-cpp-plus-sys/whisper.cpp/models/{}", name),
     ];
-    paths.iter().find(|p| Path::new(p).exists()).map(PathBuf::from)
+    paths
+        .iter()
+        .find(|p| Path::new(p).exists())
+        .map(PathBuf::from)
 }

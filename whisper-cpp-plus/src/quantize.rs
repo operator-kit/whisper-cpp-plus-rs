@@ -98,16 +98,16 @@ impl QuantizationType {
     /// Returns the approximate size as a fraction of the original F32 model.
     pub fn size_factor(&self) -> f32 {
         match self {
-            Self::Q2_K => 0.19,  // ~19% of original
-            Self::Q3_K => 0.26,  // ~26% of original
-            Self::Q4_0 => 0.31,  // ~31% of original
-            Self::Q4_1 => 0.35,  // ~35% of original
-            Self::Q4_K => 0.33,  // ~33% of original
-            Self::Q5_0 => 0.39,  // ~39% of original
-            Self::Q5_1 => 0.43,  // ~43% of original
-            Self::Q5_K => 0.41,  // ~41% of original
-            Self::Q6_K => 0.49,  // ~49% of original
-            Self::Q8_0 => 0.69,  // ~69% of original
+            Self::Q2_K => 0.19, // ~19% of original
+            Self::Q3_K => 0.26, // ~26% of original
+            Self::Q4_0 => 0.31, // ~31% of original
+            Self::Q4_1 => 0.35, // ~35% of original
+            Self::Q4_K => 0.33, // ~33% of original
+            Self::Q5_0 => 0.39, // ~39% of original
+            Self::Q5_1 => 0.43, // ~43% of original
+            Self::Q5_K => 0.41, // ~41% of original
+            Self::Q6_K => 0.49, // ~49% of original
+            Self::Q8_0 => 0.69, // ~69% of original
         }
     }
 
@@ -126,7 +126,6 @@ impl QuantizationType {
             Self::Q6_K,
         ]
     }
-
 }
 
 impl std::str::FromStr for QuantizationType {
@@ -246,9 +245,9 @@ impl WhisperQuantize {
 
         // Set up progress callback if provided
         let callback_data = callback.map(|cb| Arc::new(Mutex::new(cb)));
-        let callback_ptr = callback_data.as_ref().map(|data| {
-            Arc::clone(data) as Arc<Mutex<dyn Fn(f32) + Send>>
-        });
+        let callback_ptr = callback_data
+            .as_ref()
+            .map(|data| Arc::clone(data) as Arc<Mutex<dyn Fn(f32) + Send>>);
 
         // Create the FFI callback function
         let ffi_callback: ffi::whisper_quantize_progress_callback = if callback_ptr.is_some() {
@@ -282,30 +281,21 @@ impl WhisperQuantize {
         // Check result
         match result {
             ffi::WHISPER_QUANTIZE_OK => Ok(()),
-            ffi::WHISPER_QUANTIZE_ERROR_INVALID_MODEL => {
-                Err(QuantizeError::QuantizationFailed("Invalid model file".to_string()))
-            }
-            ffi::WHISPER_QUANTIZE_ERROR_FILE_OPEN => {
-                Err(QuantizeError::QuantizationFailed(format!(
-                    "Failed to open input file: {}",
-                    input_path.display()
-                )))
-            }
-            ffi::WHISPER_QUANTIZE_ERROR_FILE_WRITE => {
-                Err(QuantizeError::QuantizationFailed(format!(
-                    "Failed to write output file: {}",
-                    output_path.display()
-                )))
-            }
-            ffi::WHISPER_QUANTIZE_ERROR_INVALID_FTYPE => {
-                Err(QuantizeError::QuantizationFailed(format!(
-                    "Invalid quantization type: {}",
-                    qtype
-                )))
-            }
-            ffi::WHISPER_QUANTIZE_ERROR_QUANTIZATION_FAILED => {
-                Err(QuantizeError::QuantizationFailed("Quantization failed".to_string()))
-            }
+            ffi::WHISPER_QUANTIZE_ERROR_INVALID_MODEL => Err(QuantizeError::QuantizationFailed(
+                "Invalid model file".to_string(),
+            )),
+            ffi::WHISPER_QUANTIZE_ERROR_FILE_OPEN => Err(QuantizeError::QuantizationFailed(
+                format!("Failed to open input file: {}", input_path.display()),
+            )),
+            ffi::WHISPER_QUANTIZE_ERROR_FILE_WRITE => Err(QuantizeError::QuantizationFailed(
+                format!("Failed to write output file: {}", output_path.display()),
+            )),
+            ffi::WHISPER_QUANTIZE_ERROR_INVALID_FTYPE => Err(QuantizeError::QuantizationFailed(
+                format!("Invalid quantization type: {}", qtype),
+            )),
+            ffi::WHISPER_QUANTIZE_ERROR_QUANTIZATION_FAILED => Err(
+                QuantizeError::QuantizationFailed("Quantization failed".to_string()),
+            ),
             _ => Err(QuantizeError::QuantizationFailed(format!(
                 "Unknown quantization error: {}",
                 result
@@ -336,23 +326,15 @@ impl WhisperQuantize {
         let path = model_path.as_ref();
 
         if !path.exists() {
-            return Err(QuantizeError::FileNotFound(format!(
-                "{}",
-                path.display()
-            )));
+            return Err(QuantizeError::FileNotFound(format!("{}", path.display())));
         }
 
         let path_cstr = path_to_cstring(path)?;
 
-        let ftype = unsafe {
-            ffi::whisper_model_get_ftype(path_cstr.as_ptr())
-        };
+        let ftype = unsafe { ffi::whisper_model_get_ftype(path_cstr.as_ptr()) };
 
         if ftype < 0 {
-            return Err(QuantizeError::FileOpenError(format!(
-                "{}",
-                path.display()
-            )));
+            return Err(QuantizeError::FileOpenError(format!("{}", path.display())));
         }
 
         // Map the ftype to our QuantizationType enum
@@ -396,8 +378,9 @@ impl WhisperQuantize {
         qtype: QuantizationType,
     ) -> Result<u64> {
         let path = model_path.as_ref();
-        let metadata = std::fs::metadata(path)
-            .map_err(|e| QuantizeError::QuantizationFailed(format!("Failed to read model file: {}", e)))?;
+        let metadata = std::fs::metadata(path).map_err(|e| {
+            QuantizeError::QuantizationFailed(format!("Failed to read model file: {}", e))
+        })?;
 
         let original_size = metadata.len();
         let estimated_size = (original_size as f64 * qtype.size_factor() as f64) as u64;
@@ -425,7 +408,8 @@ extern "C" fn quantize_progress_callback(progress: f32) {
 
 // Helper function to convert Path to CString
 fn path_to_cstring(path: &Path) -> Result<CString> {
-    let path_str = path.to_str()
+    let path_str = path
+        .to_str()
         .ok_or_else(|| QuantizeError::QuantizationFailed("Invalid UTF-8 in path".to_string()))?;
 
     CString::new(path_str)
@@ -446,10 +430,22 @@ mod tests {
 
     #[test]
     fn test_quantization_type_from_str() {
-        assert_eq!("q4_0".parse::<QuantizationType>().unwrap(), QuantizationType::Q4_0);
-        assert_eq!("Q5_1".parse::<QuantizationType>().unwrap(), QuantizationType::Q5_1);
-        assert_eq!("q8_0".parse::<QuantizationType>().unwrap(), QuantizationType::Q8_0);
-        assert_eq!("Q3K".parse::<QuantizationType>().unwrap(), QuantizationType::Q3_K);
+        assert_eq!(
+            "q4_0".parse::<QuantizationType>().unwrap(),
+            QuantizationType::Q4_0
+        );
+        assert_eq!(
+            "Q5_1".parse::<QuantizationType>().unwrap(),
+            QuantizationType::Q5_1
+        );
+        assert_eq!(
+            "q8_0".parse::<QuantizationType>().unwrap(),
+            QuantizationType::Q8_0
+        );
+        assert_eq!(
+            "Q3K".parse::<QuantizationType>().unwrap(),
+            QuantizationType::Q3_K
+        );
         assert!("invalid".parse::<QuantizationType>().is_err());
     }
 
@@ -457,8 +453,12 @@ mod tests {
     fn test_size_factors() {
         for qtype in QuantizationType::all() {
             let factor = qtype.size_factor();
-            assert!(factor > 0.0 && factor < 1.0,
-                "{} has invalid size factor: {}", qtype, factor);
+            assert!(
+                factor > 0.0 && factor < 1.0,
+                "{} has invalid size factor: {}",
+                qtype,
+                factor
+            );
         }
     }
 }

@@ -1,13 +1,14 @@
-use std::path::{Path, PathBuf};
-use whisper_cpp_plus::{WhisperContext, FullParams, SamplingStrategy};
 use hound;
+use std::path::{Path, PathBuf};
+use whisper_cpp_plus::{FullParams, SamplingStrategy, WhisperContext};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Find model using flexible path resolution
-    let model_path = find_model("ggml-tiny.en.bin")
-        .ok_or("Model file not found. Please download a model or set WHISPER_MODEL_PATH.\n\
+    let model_path = find_model("ggml-tiny.en.bin").ok_or(
+        "Model file not found. Please download a model or set WHISPER_MODEL_PATH.\n\
                 You can download the tiny.en model from:\n\
-                https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin")?;
+                https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin",
+    )?;
 
     println!("Loading Whisper model from {:?}...", model_path);
     let ctx = WhisperContext::new(&model_path)?;
@@ -43,7 +44,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Segments: {}", result.segments.len());
 
     for (i, segment) in result.segments.iter().enumerate() {
-        println!("    Segment {}: [{:.2}s - {:.2}s] '{}'",
+        println!(
+            "    Segment {}: [{:.2}s - {:.2}s] '{}'",
             i + 1,
             segment.start_seconds(),
             segment.end_seconds(),
@@ -127,7 +129,10 @@ fn find_and_load_audio() -> Result<Vec<f32>, Box<dyn std::error::Error>> {
         }
     }
 
-    Err("No audio files found. Set WHISPER_TEST_AUDIO_DIR or provide audio at tests/audio/jfk.wav".into())
+    Err(
+        "No audio files found. Set WHISPER_TEST_AUDIO_DIR or provide audio at tests/audio/jfk.wav"
+            .into(),
+    )
 }
 
 fn load_wav_file(path: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
@@ -136,11 +141,17 @@ fn load_wav_file(path: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
 
     // Check format
     if spec.sample_rate != 16000 {
-        eprintln!("Warning: Audio sample rate is {}Hz, expected 16000Hz", spec.sample_rate);
+        eprintln!(
+            "Warning: Audio sample rate is {}Hz, expected 16000Hz",
+            spec.sample_rate
+        );
     }
 
     if spec.channels != 1 {
-        eprintln!("Warning: Audio has {} channels, using first channel only", spec.channels);
+        eprintln!(
+            "Warning: Audio has {} channels, using first channel only",
+            spec.channels
+        );
     }
 
     let samples: Vec<f32> = reader

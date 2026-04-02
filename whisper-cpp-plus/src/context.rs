@@ -39,9 +39,7 @@ impl WhisperContext {
         };
 
         if ptr.is_null() {
-            return Err(WhisperError::ModelLoadError(
-                "Failed to load model".into(),
-            ));
+            return Err(WhisperError::ModelLoadError("Failed to load model".into()));
         }
 
         Ok(Self {
@@ -88,7 +86,6 @@ impl WhisperContext {
     pub fn n_len(&self) -> i32 {
         unsafe { ffi::whisper_n_len(self.ptr.0) }
     }
-
 }
 
 impl Clone for WhisperContext {

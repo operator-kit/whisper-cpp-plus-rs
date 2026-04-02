@@ -1,21 +1,26 @@
 //! Benchmarks comparing standard VAD vs enhanced VAD with aggregation
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use whisper_cpp_plus::bench_helpers::{WhisperVadProcessor, VadParams};
-use whisper_cpp_plus::enhanced::vad::{EnhancedWhisperVadProcessor, EnhancedVadParamsBuilder};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::time::Duration;
+use whisper_cpp_plus::bench_helpers::{VadParams, WhisperVadProcessor};
+use whisper_cpp_plus::enhanced::vad::{EnhancedVadParamsBuilder, EnhancedWhisperVadProcessor};
 
 fn find_vad_model() -> Option<String> {
     if let Ok(dir) = std::env::var("WHISPER_TEST_MODEL_DIR") {
         let p = format!("{}/ggml-silero-vad.bin", dir);
-        if std::path::Path::new(&p).exists() { return Some(p); }
+        if std::path::Path::new(&p).exists() {
+            return Some(p);
+        }
     }
     let paths = [
         "tests/models/ggml-silero-vad.bin",
         "../whisper-cpp-plus-sys/whisper.cpp/models/for-tests-silero-v6.2.0-ggml.bin",
         "whisper-cpp-plus-sys/whisper.cpp/models/for-tests-silero-v6.2.0-ggml.bin",
     ];
-    paths.iter().find(|p| std::path::Path::new(p).exists()).map(|s| s.to_string())
+    paths
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .map(|s| s.to_string())
 }
 
 fn load_jfk_audio() -> Vec<f32> {
@@ -127,7 +132,9 @@ fn benchmark_vad_processing(c: &mut Criterion) {
     // Skip if model doesn't exist
     let vad_model_path = find_vad_model();
     if vad_model_path.is_none() {
-        eprintln!("VAD model not found. Set WHISPER_TEST_MODEL_DIR or run `cargo xtask test-setup`");
+        eprintln!(
+            "VAD model not found. Set WHISPER_TEST_MODEL_DIR or run `cargo xtask test-setup`"
+        );
         return;
     }
     let vad_model_path = vad_model_path.unwrap();
@@ -155,18 +162,16 @@ fn benchmark_vad_processing(c: &mut Criterion) {
     for (name, audio) in test_audios.iter() {
         // Benchmark standard VAD
         let model_path = vad_model_path.clone();
-        group.bench_with_input(
-            BenchmarkId::new("standard", name),
-            audio,
-            |b, audio| {
-                let mut vad = WhisperVadProcessor::new(&model_path).unwrap();
-                let params = VadParams::default();
-                b.iter(|| {
-                    let segments = vad.segments_from_samples(black_box(audio), &params).unwrap();
-                    segments.get_all_segments().len()
-                })
-            }
-        );
+        group.bench_with_input(BenchmarkId::new("standard", name), audio, |b, audio| {
+            let mut vad = WhisperVadProcessor::new(&model_path).unwrap();
+            let params = VadParams::default();
+            b.iter(|| {
+                let segments = vad
+                    .segments_from_samples(black_box(audio), &params)
+                    .unwrap();
+                segments.get_all_segments().len()
+            })
+        });
 
         // Benchmark enhanced VAD with aggregation
         let model_path = vad_model_path.clone();
@@ -181,10 +186,12 @@ fn benchmark_vad_processing(c: &mut Criterion) {
                     .min_gap_ms(100)
                     .build();
                 b.iter(|| {
-                    let chunks = vad.process_with_aggregation(black_box(audio), &params).unwrap();
+                    let chunks = vad
+                        .process_with_aggregation(black_box(audio), &params)
+                        .unwrap();
                     chunks.len()
                 })
-            }
+            },
         );
     }
 
@@ -212,12 +219,8 @@ fn benchmark_segment_aggregation(c: &mut Criterion) {
         })
         .collect();
 
-    let few_large_segments: Vec<(f32, f32)> = vec![
-        (0.0, 10.0),
-        (11.0, 21.0),
-        (22.0, 32.0),
-        (33.0, 43.0),
-    ];
+    let few_large_segments: Vec<(f32, f32)> =
+        vec![(0.0, 10.0), (11.0, 21.0), (22.0, 32.0), (33.0, 43.0)];
 
     let mixed_segments: Vec<(f32, f32)> = vec![
         (0.0, 2.0),
@@ -235,7 +238,7 @@ fn benchmark_segment_aggregation(c: &mut Criterion) {
                 black_box(many_small_segments.clone()),
                 30.0,
                 100,
-                true
+                true,
             );
             aggregated.len()
         })
@@ -247,7 +250,7 @@ fn benchmark_segment_aggregation(c: &mut Criterion) {
                 black_box(few_large_segments.clone()),
                 30.0,
                 100,
-                true
+                true,
             );
             aggregated.len()
         })
@@ -255,12 +258,8 @@ fn benchmark_segment_aggregation(c: &mut Criterion) {
 
     group.bench_function("mixed_segments", |b| {
         b.iter(|| {
-            let aggregated = processor.aggregate_segments(
-                black_box(mixed_segments.clone()),
-                30.0,
-                100,
-                true
-            );
+            let aggregated =
+                processor.aggregate_segments(black_box(mixed_segments.clone()), 30.0, 100, true);
             aggregated.len()
         })
     });
@@ -287,7 +286,7 @@ fn benchmark_vad_efficiency_metrics(c: &mut Criterion) {
     audio.extend(vec![0.0f32; 16000 * 3]); // 3s silence
     audio.extend(jfk_audio);
     audio.extend(vec![0.0f32; 16000 * 2]); // 2s silence
-    // Total: ~29 seconds (7s silence + 22s speech)
+                                           // Total: ~29 seconds (7s silence + 22s speech)
 
     // Measure VAD processing without sleep simulation
     let model_path = vad_model_path.clone();
@@ -300,9 +299,7 @@ fn benchmark_vad_efficiency_metrics(c: &mut Criterion) {
             let segments = segments.get_all_segments();
 
             // Calculate total audio duration that would be transcribed
-            let total_duration: f32 = segments.iter()
-                .map(|(start, end)| end - start)
-                .sum();
+            let total_duration: f32 = segments.iter().map(|(start, end)| end - start).sum();
 
             (segments.len(), total_duration)
         })
@@ -321,9 +318,7 @@ fn benchmark_vad_efficiency_metrics(c: &mut Criterion) {
             let chunks = vad.process_with_aggregation(&audio, &params).unwrap();
 
             // Calculate total audio duration that would be transcribed
-            let total_duration: f32 = chunks.iter()
-                .map(|c| c.duration_seconds)
-                .sum();
+            let total_duration: f32 = chunks.iter().map(|c| c.duration_seconds).sum();
 
             (chunks.len(), total_duration)
         })
@@ -331,7 +326,6 @@ fn benchmark_vad_efficiency_metrics(c: &mut Criterion) {
 
     group.finish();
 }
-
 
 criterion_group!(
     benches,

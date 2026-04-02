@@ -10,15 +10,19 @@
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use whisper_cpp_plus::WhisperContext;
 
-    let model_path = find_model("ggml-tiny.en.bin")
-        .ok_or("Model not found. Run: cargo xtask test-setup")?;
+    let model_path =
+        find_model("ggml-tiny.en.bin").ok_or("Model not found. Run: cargo xtask test-setup")?;
 
     println!("Loading model from {:?}...", model_path);
     let ctx = WhisperContext::new(&model_path)?;
 
     // Load audio
     let audio = load_audio()?;
-    println!("Loaded {} samples ({:.1}s)", audio.len(), audio.len() as f64 / 16000.0);
+    println!(
+        "Loaded {} samples ({:.1}s)",
+        audio.len(),
+        audio.len() as f64 / 16000.0
+    );
 
     // Async transcription — runs in blocking threadpool
     println!("\nTranscribing asynchronously...");
@@ -40,7 +44,9 @@ fn find_model(name: &str) -> Option<std::path::PathBuf> {
     for env_var in ["WHISPER_TEST_MODEL_DIR", "WHISPER_MODEL_PATH"] {
         if let Ok(dir) = std::env::var(env_var) {
             let path = std::path::Path::new(&dir).join(name);
-            if path.exists() { return Some(path); }
+            if path.exists() {
+                return Some(path);
+            }
         }
     }
     let paths = [
@@ -49,7 +55,10 @@ fn find_model(name: &str) -> Option<std::path::PathBuf> {
         format!("../whisper-cpp-plus-sys/whisper.cpp/models/{}", name),
         format!("whisper-cpp-plus-sys/whisper.cpp/models/{}", name),
     ];
-    paths.iter().find(|p| Path::new(p).exists()).map(std::path::PathBuf::from)
+    paths
+        .iter()
+        .find(|p| Path::new(p).exists())
+        .map(std::path::PathBuf::from)
 }
 
 #[cfg(feature = "async")]
@@ -65,7 +74,10 @@ fn load_audio() -> Result<Vec<f32>, Box<dyn std::error::Error>> {
                 "../whisper-cpp-plus-sys/whisper.cpp/samples/jfk.wav",
                 "whisper-cpp-plus-sys/whisper.cpp/samples/jfk.wav",
             ];
-            paths.iter().find(|p| Path::new(*p).exists()).map(|s| s.to_string())
+            paths
+                .iter()
+                .find(|p| Path::new(*p).exists())
+                .map(|s| s.to_string())
         })
         .ok_or("No audio file found")?;
 
