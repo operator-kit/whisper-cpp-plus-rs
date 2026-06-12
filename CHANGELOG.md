@@ -7,29 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.1.5] - 2026-06-12
+
+### Added
+
+- Added `PcmReader::dropped_samples()` tracking so callers can detect PCM ring-buffer overflow.
+- Added macOS GitHub Actions coverage for formatting, model setup, workspace tests, and Metal feature tests.
+- Added `cargo xtask prebuild` reporting for optional `ggml-blas` cache artifacts.
+
 ### Changed
 
-#### Performance Optimization: WhisperStream State Reuse
+- Updated the pinned whisper.cpp fork to `rmorse/whisper.cpp` `v1.8.6-stream-pcm` (`ddfe1196`), based on upstream `ggml-org/whisper.cpp` `v1.8.6`.
+- Improved macOS build handling by passing opt-in `MACOSX_DEPLOYMENT_TARGET` through to CMake as `CMAKE_OSX_DEPLOYMENT_TARGET`.
+- Set best-effort macOS QoS on the PCM capture thread to reduce scheduling-related audio drops.
+- Updated `cargo xtask prebuild --force` to remove the existing target/profile cache before rebuilding, preventing stale satellite libraries from surviving.
+- Updated macOS default prebuild behavior to produce a CPU/BLAS cache with `GGML_METAL=OFF`.
+- Updated test and benchmark model lookup to prefer real `ggml-tiny.en.bin` and `ggml-silero-v6.2.0.bin` models downloaded by `cargo xtask test-setup`.
 
-- **Fixed major performance issue** where `WhisperStream::reset()` was creating a new `WhisperState` (500MB+ allocation for medium/large models) on every streaming session
-- **Optimized `WhisperStream::reset()`** to reuse the existing `WhisperState` instead of recreating it
-  - The whisper.cpp library automatically clears internal results when starting a new transcription
-  - This matches the behavior of whisper.cpp's own streaming implementation
-- **Added `WhisperStream::recreate_state()`** method for explicit state recreation when needed (e.g., after errors or when switching between very different audio sources)
-- **Performance impact**: Eliminates repeated large memory allocations, significantly improving streaming performance especially for larger models
+### Fixed
+
+- Fixed macOS/prebuilt linking by copying and linking `ggml-blas` when whisper.cpp produces it.
+- Fixed incomplete Metal prebuilt usage by failing early when `features = ["metal"]` is used with a prebuilt cache missing `libggml-metal.a`.
+- Fixed xtask CMake invocation outside Cargo build scripts by setting explicit host, target, and xtask-specific CMake output directories.
+- Suppressed the known whisper.cpp `quantize_wrapper` switch warning with a scoped compiler flag.
 
 ### Documentation
 
-- Added comprehensive documentation explaining the state reuse optimization in `stream.rs`
-- Added unit tests to verify state reuse behavior
-
-### Technical Details
-
-The issue was identified by a user who noticed that each call to `start_streaming()` would trigger a new `whisper_init_state` allocation, even though the context was being reused. The root cause was in `WhisperStream::reset()` which was calling `self.state = self.context.create_state()?` every time.
-
-The fix aligns our implementation with whisper.cpp's approach where `whisper_full_with_state()` clears the results (`result_all.clear()`) but keeps the allocated state memory intact. This is both safe and performant.
-
-**Migration**: No changes required for existing code. The optimization is transparent to users.
+- Clarified that default macOS xtask prebuilds are CPU/BLAS only and Metal prebuilt use requires a complete custom cache containing `libggml-metal.a`.
 
 ## [0.1.0] - Previous Release
 

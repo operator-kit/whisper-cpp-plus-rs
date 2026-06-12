@@ -102,7 +102,7 @@ while let Some(segments) = stream.process_step()? {
 Enable in `Cargo.toml`:
 ```toml
 [dependencies]
-whisper-cpp-plus = { version = "0.1.4", features = ["cuda"] }
+whisper-cpp-plus = { version = "0.1.5", features = ["cuda"] }
 ```
 
 ## Modules
