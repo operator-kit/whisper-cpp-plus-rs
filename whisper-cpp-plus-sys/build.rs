@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 #[path = "cuda_detect.rs"]
 mod cuda_detect;
 
-/// Pinned commit from rmorse/whisper.cpp (stream-pcm branch, based on v1.8.3)
-const WHISPER_CPP_VERSION: &str = "02de44819ba4f9cf3f3d2a4adcfc2c5130d7140a";
+/// Pinned commit from rmorse/whisper.cpp (stream-pcm branch, based on v1.8.6)
+const WHISPER_CPP_VERSION: &str = "ddfe1196ed8e88c670c0c7e3094ed204daf749ac";
 const WHISPER_CPP_REPO: &str = "rmorse/whisper.cpp";
 
 fn main() {

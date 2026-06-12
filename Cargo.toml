@@ -1,4 +1,4 @@
-# Pinned to whisper.cpp v1.8.3 (fork: rmorse/whisper.cpp, branch: stream-pcm)
+# Pinned to whisper.cpp v1.8.6-stream-pcm (fork: rmorse/whisper.cpp, branch: stream-pcm)
 [workspace]
 members = ["whisper-cpp-plus-sys", "whisper-cpp-plus", "xtask"]
 resolver = "2"
