@@ -12,6 +12,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=WHISPER_PREBUILT_PATH");
     println!("cargo:rerun-if-env-changed=WHISPER_CPP_SOURCE_DIR");
+    println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
     for var in &cuda_detect::CUDA_PATH_ENV_VARS {
         println!("cargo:rerun-if-env-changed={}", var);
     }
@@ -57,6 +58,12 @@ fn build_with_cmake(target_os: &str) {
         .define("WHISPER_BUILD_TESTS", "OFF")
         .define("WHISPER_BUILD_EXAMPLES", "OFF")
         .pic(true);
+
+    if target_os == "macos" {
+        if let Ok(deploy_target) = env::var("MACOSX_DEPLOYMENT_TARGET") {
+            config.define("CMAKE_OSX_DEPLOYMENT_TARGET", deploy_target);
+        }
+    }
 
     // Feature-gated CMake flags (cmake handles toolkit discovery internally)
     if cfg!(feature = "cuda") {
@@ -268,6 +275,7 @@ fn build_quantize_wrapper() {
         cc::Build::new()
             .cpp(true)
             .std("c++17")
+            .flag_if_supported("-Wno-switch")
             .include(whisper_src.join("include"))
             .include(whisper_src.join("ggml/include"))
             .include(whisper_src.join("examples"))

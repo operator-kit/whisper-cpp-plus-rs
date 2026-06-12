@@ -12,6 +12,8 @@ fn find_whisper_model() -> Option<String> {
     }
     let paths = [
         "tests/models/ggml-tiny.en.bin",
+        "../whisper-cpp-plus-sys/whisper.cpp/models/ggml-tiny.en.bin",
+        "whisper-cpp-plus-sys/whisper.cpp/models/ggml-tiny.en.bin",
         "../whisper-cpp-plus-sys/whisper.cpp/models/for-tests-ggml-tiny.en.bin",
         "whisper-cpp-plus-sys/whisper.cpp/models/for-tests-ggml-tiny.en.bin",
     ];
@@ -136,13 +138,14 @@ fn test_jfk_transcription() {
 
 #[test]
 fn test_audio_duration_handling() {
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
-        eprintln!("Skipping: model not found. Run `cargo xtask test-setup`");
+    let Some(model_path) = find_whisper_model() else {
+        eprintln!(
+            "Skipping: model not found. Set WHISPER_TEST_MODEL_DIR or run `cargo xtask test-setup`"
+        );
         return;
-    }
+    };
 
-    let ctx = WhisperContext::new(model_path).expect("Failed to load model");
+    let ctx = WhisperContext::new(&model_path).expect("Failed to load model");
 
     // Test various audio durations
     let test_cases = vec![
@@ -167,12 +170,6 @@ fn test_audio_duration_handling() {
 fn test_stereo_to_mono_conversion() {
     // This test documents that stereo audio needs to be converted to mono
     // before passing to whisper - this is currently the user's responsibility
-
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !Path::new(model_path).exists() {
-        eprintln!("Skipping: model not found. Run `cargo xtask test-setup`");
-        return;
-    }
 
     // Simulate stereo audio by interleaving samples
     let mono_samples = vec![0.1, 0.2, 0.3, 0.4];

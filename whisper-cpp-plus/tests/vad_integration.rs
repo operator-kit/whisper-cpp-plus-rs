@@ -8,13 +8,19 @@ use whisper_cpp_plus::{
 /// Find VAD model (env var or default paths)
 fn find_vad_model() -> Option<String> {
     if let Ok(dir) = std::env::var("WHISPER_TEST_MODEL_DIR") {
-        let p = format!("{}/ggml-silero-vad.bin", dir);
-        if Path::new(&p).exists() {
-            return Some(p);
+        for name in ["ggml-silero-v6.2.0.bin", "ggml-silero-vad.bin"] {
+            let p = format!("{}/{}", dir, name);
+            if Path::new(&p).exists() {
+                return Some(p);
+            }
         }
     }
     let paths = [
         "tests/models/ggml-silero-vad.bin",
+        "../whisper-cpp-plus-sys/whisper.cpp/models/ggml-silero-v6.2.0.bin",
+        "whisper-cpp-plus-sys/whisper.cpp/models/ggml-silero-v6.2.0.bin",
+        "../whisper-cpp-plus-sys/whisper.cpp/models/ggml-silero-vad.bin",
+        "whisper-cpp-plus-sys/whisper.cpp/models/ggml-silero-vad.bin",
         "../whisper-cpp-plus-sys/whisper.cpp/models/for-tests-silero-v6.2.0-ggml.bin",
         "whisper-cpp-plus-sys/whisper.cpp/models/for-tests-silero-v6.2.0-ggml.bin",
     ];
@@ -34,6 +40,8 @@ fn find_whisper_model() -> Option<String> {
     }
     let paths = [
         "tests/models/ggml-tiny.en.bin",
+        "../whisper-cpp-plus-sys/whisper.cpp/models/ggml-tiny.en.bin",
+        "whisper-cpp-plus-sys/whisper.cpp/models/ggml-tiny.en.bin",
         "../whisper-cpp-plus-sys/whisper.cpp/models/for-tests-ggml-tiny.en.bin",
         "whisper-cpp-plus-sys/whisper.cpp/models/for-tests-ggml-tiny.en.bin",
     ];
@@ -271,7 +279,7 @@ fn test_vad_with_transcription() {
     let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     let mut full_transcript = String::new();
 
-    for (i, segment_audio) in speech_segments.iter().enumerate() {
+    for segment_audio in &speech_segments {
         let mut state = whisper_ctx.create_state().expect("Failed to create state");
 
         state
@@ -448,7 +456,7 @@ mod rand {
             x ^= x >> 17;
             x ^= x << 5;
             seed.set(x);
-            T::from((x as f32 / u64::MAX as f32))
+            T::from(x as f32 / u64::MAX as f32)
         })
     }
 }

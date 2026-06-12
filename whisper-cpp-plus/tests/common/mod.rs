@@ -33,7 +33,7 @@ impl TestModels {
     /// Get path to VAD model
     pub fn vad() -> Option<PathBuf> {
         Self::find_model(
-            "ggml-silero-vad.bin",
+            "ggml-silero-v6.2.0.bin",
             &[
                 // Env override (for consumers)
                 std::env::var("WHISPER_TEST_MODEL_DIR").ok(),
@@ -43,6 +43,7 @@ impl TestModels {
                 Some("whisper-cpp-plus-sys/whisper.cpp/models".to_string()),
             ],
         )
+        .or_else(|| Self::whisper_model("ggml-silero-vad.bin"))
         .or_else(|| {
             // Fallback to whisper.cpp's test VAD model
             Self::find_model(
