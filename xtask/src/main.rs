@@ -130,9 +130,18 @@ fn prebuild(profile: &str, target: Option<String>, force: bool, cuda: bool) -> R
 fn build_whisper_cpp(target: &str, profile: &str, output_dir: &Path, cuda: bool) -> Result<()> {
     let root = project_root()?;
     let vendor_path = root.join("whisper-cpp-plus-sys/whisper.cpp");
+    let cmake_out = root
+        .join("target")
+        .join("xtask-cmake")
+        .join(target)
+        .join(profile);
+    let host = detect_host().unwrap_or_else(|| target.to_string());
 
     let mut config = cmake::Config::new(&vendor_path);
     config
+        .host(&host)
+        .target(target)
+        .out_dir(&cmake_out)
         .profile(if profile == "debug" {
             "Debug"
         } else {
@@ -147,13 +156,23 @@ fn build_whisper_cpp(target: &str, profile: &str, output_dir: &Path, cuda: bool)
         config.define("GGML_CUDA", "ON");
     }
 
+    if is_macos_target(target) {
+        config.define("GGML_METAL", "OFF");
+
+        if let Ok(deploy_target) = env::var("MACOSX_DEPLOYMENT_TARGET") {
+            config.define("CMAKE_OSX_DEPLOYMENT_TARGET", deploy_target);
+        }
+    }
+
     if target.contains("windows") {
         config.cxxflag("/utf-8");
     }
 
-    if target != "unknown" {
-        // cmake crate doesn't have a .target() — set via env
-        env::set_var("TARGET", target);
+    if target != host {
+        if let Some((target_os, target_arch)) = cargo_cfg_target(target) {
+            env::set_var("CARGO_CFG_TARGET_OS", target_os);
+            env::set_var("CARGO_CFG_TARGET_ARCH", target_arch);
+        }
     }
 
     let destination = config.build();
@@ -177,37 +196,55 @@ fn copy_built_libs(cmake_dest: &Path, output_dir: &Path, target: &str, cuda: boo
         "lib"
     };
 
-    let mut libs = vec!["whisper", "ggml", "ggml-base", "ggml-cpu"];
+    let mut required_libs = vec!["whisper", "ggml", "ggml-base", "ggml-cpu"];
     if cuda {
-        libs.push("ggml-cuda");
+        required_libs.push("ggml-cuda");
     }
+    let optional_libs = ["ggml-blas"];
 
     // Collect all lib files from cmake destination tree
     let mut lib_files: Vec<PathBuf> = Vec::new();
     collect_lib_files(cmake_dest, &mut lib_files, ext);
 
-    for lib_name in &libs {
-        let filename = format!("{}{}.{}", prefix, lib_name, ext);
-        let found = lib_files.iter().find(|p| {
-            p.file_name()
-                .map(|f| f.to_string_lossy() == filename)
-                .unwrap_or(false)
-        });
+    for lib_name in &required_libs {
+        copy_built_lib(&lib_files, output_dir, prefix, lib_name, ext, true)?;
+    }
 
-        if let Some(src_path) = found {
-            let dest_path = output_dir.join(&filename);
-            fs::copy(src_path, &dest_path).with_context(|| {
-                format!(
-                    "Failed to copy {} to {}",
-                    src_path.display(),
-                    dest_path.display()
-                )
-            })?;
-            let size = fs::metadata(&dest_path)?.len();
-            println!("  {} ({:.2} MB)", filename, size as f64 / 1_048_576.0);
-        } else {
-            println!("  [warn] {} not found in build output", filename);
-        }
+    for lib_name in &optional_libs {
+        copy_built_lib(&lib_files, output_dir, prefix, lib_name, ext, false)?;
+    }
+
+    Ok(())
+}
+
+fn copy_built_lib(
+    lib_files: &[PathBuf],
+    output_dir: &Path,
+    prefix: &str,
+    lib_name: &str,
+    ext: &str,
+    warn_if_missing: bool,
+) -> Result<()> {
+    let filename = format!("{}{}.{}", prefix, lib_name, ext);
+    let found = lib_files.iter().find(|p| {
+        p.file_name()
+            .map(|f| f.to_string_lossy() == filename)
+            .unwrap_or(false)
+    });
+
+    if let Some(src_path) = found {
+        let dest_path = output_dir.join(&filename);
+        fs::copy(src_path, &dest_path).with_context(|| {
+            format!(
+                "Failed to copy {} to {}",
+                src_path.display(),
+                dest_path.display()
+            )
+        })?;
+        let size = fs::metadata(&dest_path)?.len();
+        println!("  {} ({:.2} MB)", filename, size as f64 / 1_048_576.0);
+    } else if warn_if_missing {
+        println!("  [warn] {} not found in build output", filename);
     }
 
     Ok(())
@@ -295,7 +332,7 @@ fn info() -> Result<()> {
                     println!("    Path: {}", lib_path.display());
 
                     // List satellite libs
-                    let satellites = ["ggml", "ggml-base", "ggml-cpu", "ggml-cuda"];
+                    let satellites = ["ggml", "ggml-base", "ggml-cpu", "ggml-blas", "ggml-cuda"];
                     let mut found_satellites = Vec::new();
                     for sat in &satellites {
                         let sat_file = format!("{}{}.{}", prefix, sat, ext);
@@ -401,6 +438,34 @@ fn detect_target() -> Option<String> {
         return Some(target);
     }
     detect_host()
+}
+
+fn is_macos_target(target: &str) -> bool {
+    target.contains("apple-darwin")
+}
+
+fn cargo_cfg_target(target: &str) -> Option<(&'static str, &'static str)> {
+    let arch = if target.starts_with("aarch64-") {
+        "aarch64"
+    } else if target.starts_with("x86_64-") {
+        "x86_64"
+    } else if target.starts_with("i686-") {
+        "x86"
+    } else {
+        return None;
+    };
+
+    let os = if target.contains("apple-darwin") {
+        "macos"
+    } else if target.contains("windows") {
+        "windows"
+    } else if target.contains("linux") {
+        "linux"
+    } else {
+        return None;
+    };
+
+    Some((os, arch))
 }
 
 fn detect_host() -> Option<String> {

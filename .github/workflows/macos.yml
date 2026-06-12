@@ -1,0 +1,40 @@
+name: macOS
+
+on:
+  push:
+    branches:
+      - main
+      - feat/macos-build-and-audio-fixes
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test
+    runs-on: macos-latest
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Download test models
+        run: cargo xtask test-setup
+
+      - name: Test workspace
+        run: cargo test --workspace -- --test-threads=1
+
+      - name: Test Metal feature
+        run: cargo test -p whisper-cpp-plus --features metal -- --test-threads=1
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"

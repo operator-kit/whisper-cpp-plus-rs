@@ -391,6 +391,31 @@ fn link_prebuilt_ggml_libs(dir: &Path, target_os: &str) {
             );
         }
     }
+
+    #[cfg(feature = "metal")]
+    {
+        let metal_filename = if target_os == "windows" {
+            format!("ggml-metal.{}", ext)
+        } else {
+            format!("libggml-metal.{}", ext)
+        };
+        if dir.join(&metal_filename).exists() {
+            println!("cargo:rustc-link-lib=static=ggml-metal");
+        } else {
+            panic!(
+                "\n\n\
+                 ======================================================\n\
+                 Metal feature enabled but ggml-metal.{} not found in:\n\
+                 {}\n\n\
+                 Build whisper.cpp with CMake + -DGGML_METAL=1 and copy\n\
+                 all .lib/.a files to the prebuilt directory, or unset\n\
+                 WHISPER_PREBUILT_PATH to build whisper.cpp from source.\n\
+                 ======================================================",
+                ext,
+                dir.display()
+            );
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

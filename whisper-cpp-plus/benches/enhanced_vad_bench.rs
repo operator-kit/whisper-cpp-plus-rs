@@ -7,13 +7,20 @@ use whisper_cpp_plus::enhanced::vad::{EnhancedVadParamsBuilder, EnhancedWhisperV
 
 fn find_vad_model() -> Option<String> {
     if let Ok(dir) = std::env::var("WHISPER_TEST_MODEL_DIR") {
-        let p = format!("{}/ggml-silero-vad.bin", dir);
-        if std::path::Path::new(&p).exists() {
-            return Some(p);
+        for name in ["ggml-silero-v6.2.0.bin", "ggml-silero-vad.bin"] {
+            let p = format!("{}/{}", dir, name);
+            if std::path::Path::new(&p).exists() {
+                return Some(p);
+            }
         }
     }
     let paths = [
+        "tests/models/ggml-silero-v6.2.0.bin",
+        "../whisper-cpp-plus-sys/whisper.cpp/models/ggml-silero-v6.2.0.bin",
+        "whisper-cpp-plus-sys/whisper.cpp/models/ggml-silero-v6.2.0.bin",
         "tests/models/ggml-silero-vad.bin",
+        "../whisper-cpp-plus-sys/whisper.cpp/models/ggml-silero-vad.bin",
+        "whisper-cpp-plus-sys/whisper.cpp/models/ggml-silero-vad.bin",
         "../whisper-cpp-plus-sys/whisper.cpp/models/for-tests-silero-v6.2.0-ggml.bin",
         "whisper-cpp-plus-sys/whisper.cpp/models/for-tests-silero-v6.2.0-ggml.bin",
     ];
