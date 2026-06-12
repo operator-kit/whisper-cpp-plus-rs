@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -83,7 +83,14 @@ fn prebuild(profile: &str, target: Option<String>, force: bool, cuda: bool) -> R
         println!("  CUDA: enabled");
     }
 
-    let prebuilt_dir = project_root()?.join("prebuilt").join(&target).join(profile);
+    let prebuilt_dir = prebuilt_dir_for(&target, profile)?;
+    if force && prebuilt_dir.exists() {
+        println!(
+            "Removing existing prebuilt cache: {}",
+            prebuilt_dir.display()
+        );
+        fs::remove_dir_all(&prebuilt_dir).context("Failed to remove prebuilt directory")?;
+    }
     fs::create_dir_all(&prebuilt_dir).context("Failed to create prebuilt directory")?;
 
     let lib_name = if target.contains("windows") {
@@ -433,6 +440,21 @@ fn project_root() -> Result<PathBuf> {
     Ok(root)
 }
 
+fn prebuilt_dir_for(target: &str, profile: &str) -> Result<PathBuf> {
+    validate_path_segment("target", target)?;
+    validate_path_segment("profile", profile)?;
+
+    Ok(project_root()?.join("prebuilt").join(target).join(profile))
+}
+
+fn validate_path_segment(name: &str, value: &str) -> Result<()> {
+    let mut components = Path::new(value).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => anyhow::bail!("{name} must be a single path segment: {value:?}"),
+    }
+}
+
 fn detect_target() -> Option<String> {
     if let Ok(target) = env::var("TARGET") {
         return Some(target);
@@ -466,6 +488,23 @@ fn cargo_cfg_target(target: &str) -> Option<(&'static str, &'static str)> {
     };
 
     Some((os, arch))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_path_segment_accepts_target_triple() {
+        validate_path_segment("target", "aarch64-apple-darwin").unwrap();
+    }
+
+    #[test]
+    fn validate_path_segment_rejects_path_traversal() {
+        assert!(validate_path_segment("target", "../outside").is_err());
+        assert!(validate_path_segment("target", "nested/path").is_err());
+        assert!(validate_path_segment("target", "").is_err());
+    }
 }
 
 fn detect_host() -> Option<String> {

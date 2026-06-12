@@ -30,7 +30,7 @@ cargo xtask prebuild
 cargo xtask info
 ```
 
-The prebuilt library is stored at `prebuilt/{target}/{profile}/` and automatically detected by `whisper-cpp-plus-sys/build.rs` on subsequent builds.
+The prebuilt libraries are stored at `prebuilt/{target}/{profile}/` and automatically detected by `whisper-cpp-plus-sys/build.rs` on subsequent builds. On macOS, the default xtask prebuild path produces a CPU/BLAS cache and disables Metal.
 
 ### Using the Prebuilt Library
 
@@ -68,9 +68,14 @@ cargo xtask prebuild --profile release
 # Specify target explicitly
 cargo xtask prebuild --target aarch64-apple-darwin
 
-# Force rebuild even if library exists
+# Force rebuild even if library exists.
+# This removes the existing target/profile cache before rebuilding.
 cargo xtask prebuild --force
 ```
+
+### macOS Metal and Prebuilt Libraries
+
+`cargo xtask prebuild` disables `GGML_METAL` on macOS, so the generated cache is intended for CPU/BLAS builds. For `--features metal`, either let the crate build whisper.cpp from source or point `WHISPER_PREBUILT_PATH` at a custom cache that includes `libggml-metal.a`. The build script fails early if Metal is enabled with an incomplete prebuilt cache.
 
 ### Test Setup
 

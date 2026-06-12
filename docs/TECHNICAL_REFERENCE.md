@@ -109,7 +109,7 @@ CMake handles CUDA compilation automatically. The build script:
 
 ### Metal (`--features metal`)
 
-macOS only. Links `Metal`, `MetalKit`, `MetalPerformanceShaders` frameworks. Works with both CMake build and prebuilt.
+macOS only. Source builds compile ggml with `GGML_METAL=ON` and link `Metal`, `MetalKit`, and `MetalPerformanceShaders` frameworks. Prebuilt Metal builds require the prebuilt directory to contain `libggml-metal.a`; the default `cargo xtask prebuild` path disables Metal and produces a CPU/BLAS cache.
 
 ### OpenBLAS (`--features openblas`)
 
