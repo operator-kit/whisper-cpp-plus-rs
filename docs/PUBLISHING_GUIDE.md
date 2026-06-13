@@ -4,7 +4,33 @@ Guide for publishing whisper-cpp-plus crates to crates.io.
 
 ## Pre-publish Checklist
 
-### 1. Version Bump
+### 1. Release Branch Sanity
+
+Confirm the release commit is clean, pushed, and green in CI before publishing:
+
+```bash
+git status --short --branch
+git log -1 --oneline --decorate
+
+cargo fmt --all -- --check
+cargo test --workspace -- --test-threads=1
+cargo test -p whisper-cpp-plus --features async -- --test-threads=1
+```
+
+The macOS CI workflow should also be green on the release commit. For macOS-sensitive releases, verify:
+
+```bash
+cargo xtask test-setup
+MACOSX_DEPLOYMENT_TARGET=14.0 cargo test -p whisper-cpp-plus --features metal -- --test-threads=1
+
+cargo xtask clean
+MACOSX_DEPLOYMENT_TARGET=14.0 cargo xtask prebuild --force
+cargo xtask info
+WHISPER_PREBUILT_PATH=prebuilt/<apple-target>/release cargo test -p whisper-cpp-plus-sys
+WHISPER_PREBUILT_PATH=prebuilt/<apple-target>/release cargo test -p whisper-cpp-plus --test stream_pcm_integration -- --nocapture --test-threads=1
+```
+
+### 2. Version Bump
 
 Update version in all locations:
 
@@ -15,7 +41,9 @@ Update version in all locations:
 # Doc comments (whisper-cpp-plus/src/quantize.rs)
 ```
 
-### 2. Test docs.rs Build Locally
+Update `CHANGELOG.md` with a dated release entry before publishing.
+
+### 3. Test docs.rs Build Locally
 
 docs.rs runs in a **network-isolated container** - it cannot download dependencies at build time. Our `build.rs` detects `DOCS_RS=1` and generates stub bindings instead of compiling whisper.cpp.
 
@@ -33,18 +61,45 @@ cargo doc -p whisper-cpp-plus --no-deps
 
 If this fails, the stub bindings in `whisper-cpp-plus-sys/build.rs` (`generate_stub_bindings()`) need updating to include missing FFI symbols.
 
-### 3. Run Tests
+Unset `DOCS_RS` before running normal tests again.
+
+### 4. Run Tests
 
 ```bash
 cargo test -p whisper-cpp-plus
 cargo test -p whisper-cpp-plus --features async
 ```
 
-### 4. Verify Package Contents
+### 5. Verify Package Contents
 
 ```bash
 cargo package -p whisper-cpp-plus-sys --list
 cargo package -p whisper-cpp-plus --list
+```
+
+### 6. Dry-run Publishing
+
+Always dry-run the package that is about to be published:
+
+```bash
+cargo publish -p whisper-cpp-plus-sys --dry-run
+```
+
+After `whisper-cpp-plus-sys` is published and appears in the crates.io index, dry-run the high-level crate:
+
+```bash
+cargo publish -p whisper-cpp-plus --dry-run
+```
+
+`whisper-cpp-plus` depends on the same-version `whisper-cpp-plus-sys` from crates.io. Its package verification will fail until that sys crate version exists in the crates.io index.
+
+### Windows Package Verification
+
+Some Windows antivirus tools block Cargo from executing temporary package verification build scripts. If package verification fails with `Access is denied`, create and whitelist a stable target directory, then rerun with `--target-dir`:
+
+```powershell
+New-Item -ItemType Directory -Force D:\cargo-package-verify-whisper-cpp-plus-rs\target
+cargo publish -p whisper-cpp-plus-sys --dry-run --target-dir D:\cargo-package-verify-whisper-cpp-plus-rs\target
 ```
 
 ## Publishing
@@ -55,13 +110,19 @@ cargo package -p whisper-cpp-plus --list
 # 1. Publish sys crate
 cargo publish -p whisper-cpp-plus-sys
 
-# 2. Publish main crate
+# 2. Wait for crates.io index to include whisper-cpp-plus-sys v0.1.X
+cargo search whisper-cpp-plus-sys --limit 5
+
+# 3. Dry-run main crate
+cargo publish -p whisper-cpp-plus --dry-run
+
+# 4. Publish main crate
 cargo publish -p whisper-cpp-plus
 ```
 
 ## Git Tags & GitHub Releases
 
-After publishing, create matching git tags:
+After both crates are live, create matching git tags and the GitHub release. Do not tag before both crates publish successfully.
 
 ```bash
 # Tag current commit
