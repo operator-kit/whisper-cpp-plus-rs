@@ -440,7 +440,6 @@ fn vad_simple(
 mod tests {
     use super::*;
     use crate::SamplingStrategy;
-    use std::path::Path;
 
     #[test]
     fn test_config_defaults() {
@@ -455,34 +454,41 @@ mod tests {
 
     #[test]
     fn test_config_normalization() {
-        // keep_ms clamped to step_ms
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if !Path::new(model_path).exists() {
-            // Can't test normalization without a model for the constructor.
-            // Test the logic directly instead.
-            let mut config = WhisperStreamConfig {
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
+            return;
+        };
+
+        let ctx = WhisperContext::new(&model_path).unwrap();
+        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+
+        let stream = WhisperStream::with_config(
+            &ctx,
+            params.clone(),
+            WhisperStreamConfig {
                 step_ms: 2000,
                 length_ms: 5000,
-                keep_ms: 3000, // > step_ms, should be clamped
+                keep_ms: 3000,
                 ..Default::default()
-            };
-            config.keep_ms = config.keep_ms.min(config.step_ms);
-            config.length_ms = config.length_ms.max(config.step_ms);
-            assert_eq!(config.keep_ms, 2000);
-            assert_eq!(config.length_ms, 5000);
+            },
+        )
+        .unwrap();
+        assert_eq!(stream.config.keep_ms, 2000);
+        assert_eq!(stream.config.length_ms, 5000);
 
-            // length_ms clamped up to step_ms
-            let mut config2 = WhisperStreamConfig {
+        let stream = WhisperStream::with_config(
+            &ctx,
+            params,
+            WhisperStreamConfig {
                 step_ms: 8000,
-                length_ms: 5000, // < step_ms, should be raised
+                length_ms: 5000,
                 keep_ms: 200,
                 ..Default::default()
-            };
-            config2.keep_ms = config2.keep_ms.min(config2.step_ms);
-            config2.length_ms = config2.length_ms.max(config2.step_ms);
-            assert_eq!(config2.length_ms, 8000);
-            assert_eq!(config2.keep_ms, 200);
-        }
+            },
+        )
+        .unwrap();
+        assert_eq!(stream.config.length_ms, 8000);
+        assert_eq!(stream.config.keep_ms, 200);
     }
 
     #[test]
@@ -533,13 +539,12 @@ mod tests {
 
     #[test]
     fn test_feed_and_buffer() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if !Path::new(model_path).exists() {
-            eprintln!("Skipping test_feed_and_buffer: model not found");
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
             return;
-        }
+        };
 
-        let ctx = WhisperContext::new(model_path).unwrap();
+        let ctx = WhisperContext::new(&model_path).unwrap();
         let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         let mut stream = WhisperStream::new(&ctx, params).unwrap();
 
@@ -574,13 +579,12 @@ mod tests {
 
     #[test]
     fn test_reset() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if !Path::new(model_path).exists() {
-            eprintln!("Skipping test_reset: model not found");
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
             return;
-        }
+        };
 
-        let ctx = WhisperContext::new(model_path).unwrap();
+        let ctx = WhisperContext::new(&model_path).unwrap();
         let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         let mut stream = WhisperStream::new(&ctx, params).unwrap();
 
@@ -596,13 +600,12 @@ mod tests {
 
     #[test]
     fn test_fixed_step_basic() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if !Path::new(model_path).exists() {
-            eprintln!("Skipping test_fixed_step_basic: model not found");
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
             return;
-        }
+        };
 
-        let ctx = WhisperContext::new(model_path).unwrap();
+        let ctx = WhisperContext::new(&model_path).unwrap();
         let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
 
         // Use a small step for testing
@@ -629,13 +632,12 @@ mod tests {
 
     #[test]
     fn test_prompt_propagation() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if !Path::new(model_path).exists() {
-            eprintln!("Skipping test_prompt_propagation: model not found");
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
             return;
-        }
+        };
 
-        let ctx = WhisperContext::new(model_path).unwrap();
+        let ctx = WhisperContext::new(&model_path).unwrap();
         let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
 
         let config = WhisperStreamConfig {
