@@ -126,6 +126,11 @@ pull request test job and rely on the already-green `develop` push run; pushes
 to `main` and `develop` always run the full macOS job so integration branches
 stay verified.
 
+The macOS workflow pre-downloads test models with Hugging Face Hub before
+running `cargo xtask test-setup`. Configure the repository secret `HF_TOKEN` for
+authenticated Hugging Face downloads; without it, the workflow falls back to
+unauthenticated downloads and may hit resolver rate limits.
+
 Clippy is used as a CI gate. The baseline is:
 
 ```bash
