@@ -57,9 +57,22 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+      - name: Check Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Check async Clippy
+        run: cargo clippy -p whisper-cpp-plus --all-targets --features async -- -D warnings
+
+      - name: Check Metal Clippy
+        run: cargo clippy -p whisper-cpp-plus --all-targets --features metal -- -D warnings
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
 
       - name: Download test models
         run: cargo xtask test-setup

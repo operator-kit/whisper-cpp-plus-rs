@@ -193,25 +193,3 @@ fn test_drop_safety() {
 
     // Should not crash or double-free
 }
-
-// Compile-time tests for API misuse prevention
-#[cfg(compile_fail_tests)]
-mod compile_fail {
-    use super::*;
-
-    // This should fail to compile: WhisperState is not Sync
-    // #[test]
-    // fn state_not_sync() {
-    //     assert_sync::<WhisperState>(); // COMPILE ERROR
-    // }
-
-    // This should fail to compile: Can't use state after context is dropped
-    // #[test]
-    // fn state_lifetime() {
-    //     let state = {
-    //         let ctx = WhisperContext::new("model.bin").unwrap();
-    //         WhisperState::new(&ctx).unwrap()
-    //     };
-    //     // state.full(...); // COMPILE ERROR: ctx doesn't live long enough
-    // }
-}

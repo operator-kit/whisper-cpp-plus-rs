@@ -123,7 +123,7 @@ fn test_quantize_with_progress() {
         QuantizationType::Q4_0,
         move |progress| {
             assert!(
-                progress >= 0.0 && progress <= 1.0,
+                (0.0..=1.0).contains(&progress),
                 "Invalid progress value: {}",
                 progress
             );
@@ -185,11 +185,7 @@ fn test_estimate_quantized_size() {
         );
 
         let expected = (original_size as f64 * qtype.size_factor() as f64) as u64;
-        let diff = if estimated > expected {
-            estimated - expected
-        } else {
-            expected - estimated
-        };
+        let diff = estimated.abs_diff(expected);
 
         let margin = (expected as f64 * 0.1) as u64;
         assert!(

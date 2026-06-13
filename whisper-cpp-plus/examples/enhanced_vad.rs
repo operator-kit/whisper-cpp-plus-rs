@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Found {} speech chunks after aggregation", chunks.len());
 
     // Configure transcription parameters
-    let params = TranscriptionParams::builder()
+    let _params = TranscriptionParams::builder()
         .language("en")
         .enable_timestamps()
         .build();

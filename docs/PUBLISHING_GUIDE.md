@@ -17,7 +17,9 @@ git status --short --branch
 git log -1 --oneline --decorate
 
 cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace -- --test-threads=1
+cargo clippy -p whisper-cpp-plus --all-targets --features async -- -D warnings
 cargo test -p whisper-cpp-plus --features async -- --test-threads=1
 ```
 
@@ -25,6 +27,7 @@ The macOS CI workflow should also be green on the release commit. For macOS-sens
 
 ```bash
 cargo xtask test-setup
+MACOSX_DEPLOYMENT_TARGET=14.0 cargo clippy -p whisper-cpp-plus --all-targets --features metal -- -D warnings
 MACOSX_DEPLOYMENT_TARGET=14.0 cargo test -p whisper-cpp-plus --features metal -- --test-threads=1
 
 cargo xtask clean

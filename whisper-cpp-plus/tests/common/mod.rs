@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 /// Model paths for testing
 pub struct TestModels;
 
+#[allow(dead_code)]
 impl TestModels {
     /// Get path to a whisper model file.
     /// Checks: 1. WHISPER_TEST_MODEL_DIR env var, 2. submodule paths

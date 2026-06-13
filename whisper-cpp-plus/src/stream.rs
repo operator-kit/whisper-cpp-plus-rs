@@ -316,11 +316,8 @@ impl WhisperStream {
     pub fn flush(&mut self) -> Result<Vec<Segment>> {
         let mut all_segments = Vec::new();
 
-        loop {
-            match self.process_step()? {
-                Some(segments) => all_segments.extend(segments),
-                None => break,
-            }
+        while let Some(segments) = self.process_step()? {
+            all_segments.extend(segments);
         }
 
         // If there's leftover audio that's less than a full step, run inference on it
@@ -490,21 +487,25 @@ mod tests {
 
     #[test]
     fn test_n_new_line_calculation() {
+        fn calculate_n_new_line(length_ms: i32, step_ms: i32) -> i32 {
+            (length_ms / step_ms - 1).max(1)
+        }
+
         // n_new_line = max(1, length_ms / step_ms - 1) when !use_vad
         // Defaults: length_ms=10000, step_ms=3000 → 10000/3000 - 1 = 2
-        let n = (10000i32 / 3000 - 1).max(1);
+        let n = calculate_n_new_line(10000, 3000);
         assert_eq!(n, 2);
 
         // step_ms=5000, length_ms=10000 → 10000/5000 - 1 = 1
-        let n = (10000i32 / 5000 - 1).max(1);
+        let n = calculate_n_new_line(10000, 5000);
         assert_eq!(n, 1);
 
         // step_ms=10000, length_ms=10000 → 10000/10000 - 1 = 0 → clamped to 1
-        let n = (10000i32 / 10000 - 1).max(1);
+        let n = calculate_n_new_line(10000, 10000);
         assert_eq!(n, 1);
 
         // step_ms=2000, length_ms=10000 → 10000/2000 - 1 = 4
-        let n = (10000i32 / 2000 - 1).max(1);
+        let n = calculate_n_new_line(10000, 2000);
         assert_eq!(n, 4);
 
         // VAD mode: always 1

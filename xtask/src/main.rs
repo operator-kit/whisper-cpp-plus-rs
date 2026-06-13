@@ -490,23 +490,6 @@ fn cargo_cfg_target(target: &str) -> Option<(&'static str, &'static str)> {
     Some((os, arch))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn validate_path_segment_accepts_target_triple() {
-        validate_path_segment("target", "aarch64-apple-darwin").unwrap();
-    }
-
-    #[test]
-    fn validate_path_segment_rejects_path_traversal() {
-        assert!(validate_path_segment("target", "../outside").is_err());
-        assert!(validate_path_segment("target", "nested/path").is_err());
-        assert!(validate_path_segment("target", "").is_err());
-    }
-}
-
 fn detect_host() -> Option<String> {
     let target = if cfg!(all(
         target_os = "windows",
@@ -532,4 +515,21 @@ fn detect_host() -> Option<String> {
         return None;
     };
     Some(target.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_path_segment_accepts_target_triple() {
+        validate_path_segment("target", "aarch64-apple-darwin").unwrap();
+    }
+
+    #[test]
+    fn validate_path_segment_rejects_path_traversal() {
+        assert!(validate_path_segment("target", "../outside").is_err());
+        assert!(validate_path_segment("target", "nested/path").is_err());
+        assert!(validate_path_segment("target", "").is_err());
+    }
 }
