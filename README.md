@@ -83,6 +83,11 @@ The build script uses CMake to compile whisper.cpp with CUDA support automatical
 
 Model quantization available via `features = ["quantization"]`.
 
+## Contributing
+
+Development workflow, branch policy, PR expectations, and release flow are
+documented in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## API Overview
 
 ### Core Types

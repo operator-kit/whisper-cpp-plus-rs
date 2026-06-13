@@ -2,6 +2,10 @@
 
 Guide for publishing whisper-cpp-plus crates to crates.io.
 
+For branch policy, PR flow, and release branch handling, see
+[`CONTRIBUTING.md`](../CONTRIBUTING.md). This guide focuses on the concrete
+release and crates.io publishing checklist.
+
 ## Pre-publish Checklist
 
 ### 1. Release Branch Sanity
