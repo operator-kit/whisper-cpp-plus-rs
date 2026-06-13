@@ -79,6 +79,54 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
 
+      - name: Cache test models
+        uses: actions/cache@v4
+        with:
+          path: |
+            whisper-cpp-plus-sys/whisper.cpp/models/ggml-tiny.en.bin
+            whisper-cpp-plus-sys/whisper.cpp/models/ggml-silero-v6.2.0.bin
+          key: ${{ runner.os }}-whisper-test-models-tiny-en-silero-v6-2-0
+
+      - name: Install Hugging Face Hub
+        run: |
+          python3 -m venv .hf-venv
+          .hf-venv/bin/python -m pip install -U pip
+          .hf-venv/bin/python -m pip install -U huggingface_hub
+
+      - name: Pre-download test models
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          .hf-venv/bin/python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from huggingface_hub import hf_hub_download
+
+          models_dir = Path("whisper-cpp-plus-sys/whisper.cpp/models")
+          models_dir.mkdir(parents=True, exist_ok=True)
+
+          token = os.environ.get("HF_TOKEN") or None
+          models = [
+              ("ggerganov/whisper.cpp", "ggml-tiny.en.bin"),
+              ("ggml-org/whisper-vad", "ggml-silero-v6.2.0.bin"),
+          ]
+
+          for repo_id, filename in models:
+              target = models_dir / filename
+              if target.exists():
+                  print(f"[skip] {filename} already exists")
+                  continue
+
+              print(f"[download] {repo_id}/{filename}")
+              hf_hub_download(
+                  repo_id=repo_id,
+                  filename=filename,
+                  local_dir=str(models_dir),
+                  token=token,
+              )
+          PY
+
       - name: Download test models
         run: cargo xtask test-setup
 
