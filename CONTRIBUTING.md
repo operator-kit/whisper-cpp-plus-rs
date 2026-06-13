@@ -86,12 +86,14 @@ Before opening or merging a normal PR, run the checks that match the change:
 
 ```bash
 cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace -- --test-threads=1
 ```
 
 For async changes:
 
 ```bash
+cargo clippy -p whisper-cpp-plus --all-targets --features async -- -D warnings
 cargo test -p whisper-cpp-plus --features async -- --test-threads=1
 ```
 
@@ -99,6 +101,7 @@ For macOS or Metal-sensitive changes:
 
 ```bash
 cargo xtask test-setup
+MACOSX_DEPLOYMENT_TARGET=14.0 cargo clippy -p whisper-cpp-plus --all-targets --features metal -- -D warnings
 MACOSX_DEPLOYMENT_TARGET=14.0 cargo test -p whisper-cpp-plus --features metal -- --test-threads=1
 ```
 
@@ -118,11 +121,12 @@ make that intent explicit in code rather than allowing warning noise to build up
 The macOS workflow uses path filtering for pull requests. Documentation-only
 changes do not run the expensive model-backed macOS and Metal test job. Code,
 build, dependency, `xtask`, sys-crate, high-level crate, and workflow changes do
-run the full macOS job. Pushes to `main` and `develop` always run the full macOS
-job so integration branches stay verified.
+run the full macOS job. Direct `develop` -> `main` promotion PRs skip the heavy
+pull request test job and rely on the already-green `develop` push run; pushes
+to `main` and `develop` always run the full macOS job so integration branches
+stay verified.
 
-Clippy should be used as a CI gate once the current warning baseline is clean.
-The intended baseline is:
+Clippy is used as a CI gate. The baseline is:
 
 ```bash
 cargo clippy --workspace --all-targets -- -D warnings

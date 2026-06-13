@@ -1,5 +1,4 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use whisper_cpp_plus::WhisperContext;
 
 fn bench_placeholder(c: &mut Criterion) {
     c.bench_function("placeholder", |b| {

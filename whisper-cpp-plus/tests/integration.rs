@@ -88,8 +88,7 @@ fn test_transcription_with_params() {
     assert!(result.is_ok());
 
     let transcription = result.unwrap();
-    // Check that we have both text and segments
-    assert!(transcription.segments.len() >= 0);
+    // Check that text and segments stay internally consistent.
     assert_eq!(
         transcription
             .text
@@ -106,7 +105,7 @@ fn test_transcription_with_params() {
 
 #[test]
 fn test_full_params_configuration() {
-    let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
+    let _params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
         .language("en")
         .translate(false)
         .no_context(false)
@@ -123,7 +122,7 @@ fn test_full_params_configuration() {
 
 #[test]
 fn test_beam_search_strategy() {
-    let params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5 })
+    let _params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5 })
         .language("en")
         .temperature(0.5);
 

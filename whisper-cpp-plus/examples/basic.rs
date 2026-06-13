@@ -1,4 +1,3 @@
-use hound;
 use std::path::{Path, PathBuf};
 use whisper_cpp_plus::{FullParams, SamplingStrategy, WhisperContext};
 

@@ -222,7 +222,7 @@ fn add_noise_to_audio(audio: &[f32]) -> Vec<f32> {
             i.hash(&mut rng);
             let noise_val = (rng.finish() as f32 / u64::MAX as f32 - 0.5) * 0.15; // Lower noise level
             let noisy = sample + noise_val;
-            noisy.max(-1.0).min(1.0) // Clip to valid range
+            noisy.clamp(-1.0, 1.0) // Clip to valid range
         })
         .collect()
 }
