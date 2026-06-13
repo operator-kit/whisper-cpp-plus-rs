@@ -26,6 +26,12 @@ Thumbs.db
 perf.data
 perf.data.old
 
+# Coverage reports
+lcov.info
+coverage/
+coverage*.json
+cobertura.xml
+
 # Documentation build
 /target/doc/
 
