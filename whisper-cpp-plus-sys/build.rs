@@ -237,10 +237,8 @@ fn file_exists_recursive(dir: &Path, filename: &str) -> bool {
             if path.file_name().and_then(|s| s.to_str()) == Some(filename) {
                 return true;
             }
-        } else if path.is_dir() {
-            if file_exists_recursive(&path, filename) {
-                return true;
-            }
+        } else if path.is_dir() && file_exists_recursive(&path, filename) {
+            return true;
         }
     }
     false

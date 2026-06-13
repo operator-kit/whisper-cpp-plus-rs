@@ -153,7 +153,7 @@ fn benchmark_vad_processing(c: &mut Criterion) {
     let jfk_audio = load_jfk_audio();
 
     // Create different audio samples for testing
-    let test_audios = vec![
+    let test_audios = [
         ("jfk_original", jfk_audio.clone()),
         ("jfk_with_silence", {
             // Add silence padding to simulate longer audio with gaps

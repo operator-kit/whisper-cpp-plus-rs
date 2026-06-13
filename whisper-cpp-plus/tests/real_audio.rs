@@ -1,4 +1,3 @@
-use hound;
 use std::path::Path;
 use whisper_cpp_plus::{FullParams, SamplingStrategy, WhisperContext};
 
@@ -172,8 +171,8 @@ fn test_stereo_to_mono_conversion() {
     // before passing to whisper - this is currently the user's responsibility
 
     // Simulate stereo audio by interleaving samples
-    let mono_samples = vec![0.1, 0.2, 0.3, 0.4];
-    let stereo_samples = vec![0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.4]; // L, R, L, R...
+    let mono_samples = [0.1, 0.2, 0.3, 0.4];
+    let stereo_samples = [0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.4]; // L, R, L, R...
 
     // Convert stereo to mono by averaging channels
     let converted_mono: Vec<f32> = stereo_samples

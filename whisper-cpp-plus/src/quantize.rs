@@ -157,6 +157,8 @@ impl std::fmt::Display for QuantizationType {
 /// Progress callback for quantization operations
 pub type ProgressCallback = Box<dyn Fn(f32) + Send>;
 
+type SharedProgressCallback = Arc<Mutex<ProgressCallback>>;
+
 /// Model quantizer for converting Whisper models to different quantization formats
 pub struct WhisperQuantize;
 
@@ -245,19 +247,16 @@ impl WhisperQuantize {
 
         // Set up progress callback if provided
         let callback_data = callback.map(|cb| Arc::new(Mutex::new(cb)));
-        let callback_ptr = callback_data
-            .as_ref()
-            .map(|data| Arc::clone(data) as Arc<Mutex<dyn Fn(f32) + Send>>);
 
         // Create the FFI callback function
-        let ffi_callback: ffi::whisper_quantize_progress_callback = if callback_ptr.is_some() {
+        let ffi_callback: ffi::whisper_quantize_progress_callback = if callback_data.is_some() {
             Some(quantize_progress_callback)
         } else {
             None
         };
 
         // Store callback data in thread-local storage for the callback to access
-        if let Some(ptr) = callback_ptr {
+        if let Some(ptr) = callback_data {
             CALLBACK_DATA.with(|data| {
                 *data.borrow_mut() = Some(ptr);
             });
@@ -391,7 +390,7 @@ impl WhisperQuantize {
 
 // Thread-local storage for callback data
 thread_local! {
-    static CALLBACK_DATA: std::cell::RefCell<Option<Arc<Mutex<dyn Fn(f32) + Send>>>> =
+    static CALLBACK_DATA: std::cell::RefCell<Option<SharedProgressCallback>> =
         std::cell::RefCell::new(None);
 }
 
