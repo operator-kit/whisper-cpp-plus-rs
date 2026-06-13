@@ -88,13 +88,16 @@ jobs:
           key: ${{ runner.os }}-whisper-test-models-tiny-en-silero-v6-2-0
 
       - name: Install Hugging Face Hub
-        run: python3 -m pip install --user -U "huggingface_hub[cli]"
+        run: |
+          python3 -m venv .hf-venv
+          .hf-venv/bin/python -m pip install -U pip
+          .hf-venv/bin/python -m pip install -U huggingface_hub
 
       - name: Pre-download test models
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          python3 - <<'PY'
+          .hf-venv/bin/python - <<'PY'
           import os
           from pathlib import Path
 
