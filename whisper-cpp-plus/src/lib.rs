@@ -53,6 +53,8 @@ mod params;
 mod state;
 mod stream;
 mod stream_pcm;
+#[cfg(test)]
+mod test_support;
 mod vad;
 
 pub mod enhanced;
@@ -257,7 +259,6 @@ impl WhisperContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use std::sync::Arc;
 
     #[test]
@@ -268,48 +269,48 @@ mod tests {
 
     #[test]
     fn test_model_loading() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if Path::new(model_path).exists() {
-            let ctx = WhisperContext::new(model_path);
-            assert!(ctx.is_ok());
-        } else {
-            eprintln!("Skipping test_model_loading: model file not found");
-        }
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
+            return;
+        };
+
+        let ctx = WhisperContext::new(&model_path);
+        assert!(ctx.is_ok());
     }
 
     #[test]
     fn test_silence_handling() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if Path::new(model_path).exists() {
-            let ctx = WhisperContext::new(model_path).unwrap();
-            let silence = vec![0.0f32; 16000]; // 1 second of silence
-            let result = ctx.transcribe(&silence);
-            assert!(result.is_ok());
-        } else {
-            eprintln!("Skipping test_silence_handling: model file not found");
-        }
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
+            return;
+        };
+
+        let ctx = WhisperContext::new(&model_path).unwrap();
+        let silence = vec![0.0f32; 16000]; // 1 second of silence
+        let result = ctx.transcribe(&silence);
+        assert!(result.is_ok());
     }
 
     #[test]
     fn test_concurrent_states() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if Path::new(model_path).exists() {
-            let ctx = Arc::new(WhisperContext::new(model_path).unwrap());
-            let handles: Vec<_> = (0..4)
-                .map(|_| {
-                    let ctx = Arc::clone(&ctx);
-                    std::thread::spawn(move || {
-                        let audio = vec![0.0f32; 16000];
-                        ctx.transcribe(&audio)
-                    })
-                })
-                .collect();
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
+            return;
+        };
 
-            for handle in handles {
-                assert!(handle.join().unwrap().is_ok());
-            }
-        } else {
-            eprintln!("Skipping test_concurrent_states: model file not found");
+        let ctx = Arc::new(WhisperContext::new(&model_path).unwrap());
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let ctx = Arc::clone(&ctx);
+                std::thread::spawn(move || {
+                    let audio = vec![0.0f32; 16000];
+                    ctx.transcribe(&audio)
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            assert!(handle.join().unwrap().is_ok());
         }
     }
 

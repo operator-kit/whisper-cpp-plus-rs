@@ -30,7 +30,7 @@ jobs:
 
       - name: Detect relevant changes
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             run_macos:
@@ -80,7 +80,7 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
 
       - name: Cache test models
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             whisper-cpp-plus-sys/whisper.cpp/models/ggml-tiny.en.bin

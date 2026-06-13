@@ -990,14 +990,12 @@ mod tests {
     #[test]
     fn test_stream_pcm_config_vad_normalization() {
         // When use_vad=true, keep_ms should be forced to 0
-        use std::path::Path;
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if !Path::new(model_path).exists() {
-            eprintln!("Skipping: model not found");
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
             return;
-        }
+        };
 
-        let ctx = WhisperContext::new(model_path).unwrap();
+        let ctx = WhisperContext::new(&model_path).unwrap();
         let params = FullParams::default();
         let cursor = std::io::Cursor::new(Vec::<u8>::new());
         let reader = PcmReader::new(Box::new(cursor), PcmReaderConfig::default());

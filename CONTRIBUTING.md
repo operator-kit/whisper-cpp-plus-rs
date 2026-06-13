@@ -118,6 +118,9 @@ WHISPER_PREBUILT_PATH=prebuilt/<apple-target>/release cargo test -p whisper-cpp-
 The project should stay warning-free. If a warning is intentional, prefer to
 make that intent explicit in code rather than allowing warning noise to build up.
 
+For local coverage reports, use `cargo-llvm-cov` as documented in
+[`docs/COVERAGE.md`](docs/COVERAGE.md).
+
 The macOS workflow uses path filtering for pull requests. Documentation-only
 changes do not run the expensive model-backed macOS and Metal test job. Code,
 build, dependency, `xtask`, sys-crate, high-level crate, and workflow changes do
