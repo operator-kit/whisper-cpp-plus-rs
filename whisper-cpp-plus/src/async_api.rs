@@ -222,75 +222,80 @@ impl SharedAsyncStream {
 mod tests {
     use super::*;
     use crate::SamplingStrategy;
-    use std::path::Path;
 
     #[tokio::test]
     async fn test_async_transcribe() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if Path::new(model_path).exists() {
-            let ctx = WhisperContext::new(model_path).unwrap();
-            let audio = vec![0.0f32; 16000]; // 1 second of silence
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
+            return;
+        };
 
-            let result = ctx.transcribe_async(audio).await;
-            assert!(result.is_ok());
-        }
+        let ctx = WhisperContext::new(&model_path).unwrap();
+        let audio = vec![0.0f32; 16000]; // 1 second of silence
+
+        let result = ctx.transcribe_async(audio).await;
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_async_stream() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if Path::new(model_path).exists() {
-            let ctx = WhisperContext::new(model_path).unwrap();
-            let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
+            return;
+        };
 
-            let stream = AsyncWhisperStream::new(ctx, params);
-            assert!(stream.is_ok());
+        let ctx = WhisperContext::new(&model_path).unwrap();
+        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
 
-            let stream = stream.unwrap();
+        let stream = AsyncWhisperStream::new(ctx, params);
+        assert!(stream.is_ok());
 
-            // Feed some audio
-            let audio = vec![0.0f32; 16000];
-            let result = stream.feed_audio(audio).await;
-            assert!(result.is_ok());
+        let stream = stream.unwrap();
 
-            // Stop the stream
-            let result = stream.stop().await;
-            assert!(result.is_ok());
-        }
+        // Feed some audio
+        let audio = vec![0.0f32; 16000];
+        let result = stream.feed_audio(audio).await;
+        assert!(result.is_ok());
+
+        // Stop the stream
+        let result = stream.stop().await;
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_shared_stream() {
-        let model_path = "tests/models/ggml-tiny.en.bin";
-        if Path::new(model_path).exists() {
-            let ctx = WhisperContext::new(model_path).unwrap();
-            let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        let Some(model_path) = crate::test_support::tiny_en() else {
+            crate::test_support::note_missing_fixture("tiny.en model");
+            return;
+        };
 
-            let stream = SharedAsyncStream::new(&ctx, params, WhisperStreamConfig::default()).await;
-            assert!(stream.is_ok());
+        let ctx = WhisperContext::new(&model_path).unwrap();
+        let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
 
-            let stream = stream.unwrap();
+        let stream = SharedAsyncStream::new(&ctx, params, WhisperStreamConfig::default()).await;
+        assert!(stream.is_ok());
 
-            // Feed audio from multiple tasks
-            let stream1 = stream.clone();
-            let handle1 = tokio::spawn(async move {
-                let audio = vec![0.0f32; 16000];
-                stream1.feed_and_process(audio).await
-            });
+        let stream = stream.unwrap();
 
-            let stream2 = stream.clone();
-            let handle2 = tokio::spawn(async move {
-                let audio = vec![0.0f32; 16000];
-                stream2.feed_and_process(audio).await
-            });
+        // Feed audio from multiple tasks
+        let stream1 = stream.clone();
+        let handle1 = tokio::spawn(async move {
+            let audio = vec![0.0f32; 16000];
+            stream1.feed_and_process(audio).await
+        });
 
-            // Wait for both
-            let result1 = handle1.await.unwrap();
-            let result2 = handle2.await.unwrap();
+        let stream2 = stream.clone();
+        let handle2 = tokio::spawn(async move {
+            let audio = vec![0.0f32; 16000];
+            stream2.feed_and_process(audio).await
+        });
 
-            assert!(result1.is_ok());
-            assert!(result2.is_ok());
-        }
+        // Wait for both
+        let result1 = handle1.await.unwrap();
+        let result2 = handle2.await.unwrap();
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
     }
 }
 

@@ -373,13 +373,13 @@ mod tests {
     #[test]
     fn test_vad_processor_creation() {
         // This test will only run if a VAD model is available
-        let model_path = "tests/models/ggml-silero-vad.bin";
-        if Path::new(model_path).exists() {
-            let processor = WhisperVadProcessor::new(model_path);
-            assert!(processor.is_ok());
-        } else {
-            eprintln!("Skipping VAD processor creation test: model not found");
-        }
+        let Some(model_path) = crate::test_support::vad() else {
+            crate::test_support::note_missing_fixture("Silero VAD model");
+            return;
+        };
+
+        let processor = WhisperVadProcessor::new(&model_path);
+        assert!(processor.is_ok());
     }
 
     #[test]

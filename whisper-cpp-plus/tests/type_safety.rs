@@ -1,3 +1,6 @@
+mod common;
+
+use common::TestModels;
 use std::sync::Arc;
 use std::thread;
 use whisper_cpp_plus::{
@@ -25,29 +28,25 @@ fn test_state_is_send() {
 }
 
 #[test]
-fn test_params_are_not_send_sync() {
-    // TranscriptionParams and FullParams contain raw pointers from FFI,
-    // so they should NOT be Send or Sync - this is correct for safety!
-    // This test documents that the types correctly prevent unsafe sharing.
-
-    // These would fail to compile (which is good for safety):
-    // assert_send::<TranscriptionParams>();
-    // assert_sync::<TranscriptionParams>();
-    // assert_send::<FullParams>();
-    // assert_sync::<FullParams>();
+fn test_params_are_send_sync() {
+    // TranscriptionParams and FullParams are intentionally Send + Sync. They
+    // hold FFI parameter structs plus owned CString storage for pointer-backed
+    // fields, and the crate marks that usage as safe for controlled contexts.
+    assert_send::<TranscriptionParams>();
+    assert_sync::<TranscriptionParams>();
+    assert_send::<FullParams>();
+    assert_sync::<FullParams>();
 }
 
 #[test]
 fn test_arc_context_thread_safety() {
-    // Skip if model doesn't exist
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !std::path::Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping: model not found. Run `cargo xtask test-setup`");
         return;
-    }
+    };
 
     // Test that Arc<WhisperContext> can be safely shared across threads
-    let context = Arc::new(WhisperContext::new(model_path).unwrap());
+    let context = Arc::new(WhisperContext::new(&model_path).unwrap());
 
     let handles: Vec<_> = (0..4)
         .map(|i| {
@@ -98,13 +97,12 @@ fn test_context_not_copy() {
 fn test_lifetime_safety() {
     // Test that states cannot outlive their contexts
     // This is enforced through lifetime parameters in WhisperState
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !std::path::Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping: model not found. Run `cargo xtask test-setup`");
         return;
-    }
+    };
 
-    let context = Arc::new(WhisperContext::new(model_path).unwrap());
+    let context = Arc::new(WhisperContext::new(&model_path).unwrap());
     let state = WhisperState::new(&context).unwrap();
 
     // State holds a reference to context, so it cannot outlive it
@@ -131,13 +129,12 @@ fn test_null_pointer_safety() {
 #[test]
 fn test_buffer_safety() {
     // Test that audio buffer handling is safe
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !std::path::Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping: model not found. Run `cargo xtask test-setup`");
         return;
-    }
+    };
 
-    let ctx = WhisperContext::new(model_path).unwrap();
+    let ctx = WhisperContext::new(&model_path).unwrap();
 
     // Empty buffer should be handled safely (no crash)
     let empty: Vec<f32> = vec![];
@@ -178,14 +175,13 @@ fn test_params_type_safety() {
 #[test]
 fn test_drop_safety() {
     // Test that Drop implementations are safe and don't cause double-free
-    let model_path = "tests/models/ggml-tiny.en.bin";
-    if !std::path::Path::new(model_path).exists() {
+    let Some(model_path) = TestModels::tiny_en() else {
         eprintln!("Skipping: model not found. Run `cargo xtask test-setup`");
         return;
-    }
+    };
 
     {
-        let ctx = WhisperContext::new(model_path).unwrap();
+        let ctx = WhisperContext::new(&model_path).unwrap();
         let _state1 = WhisperState::new(&ctx).unwrap();
         let _state2 = WhisperState::new(&ctx).unwrap();
         // Both states should drop safely when going out of scope
