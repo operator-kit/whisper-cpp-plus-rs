@@ -44,7 +44,12 @@ jobs:
   test:
     name: Test
     needs: changes
-    if: github.event_name == 'push' || needs.changes.outputs.run_macos == 'true'
+    if: >
+      github.event_name == 'push' ||
+      (
+        needs.changes.outputs.run_macos == 'true' &&
+        !(github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'develop')
+      )
     runs-on: macos-latest
     env:
       CARGO_TERM_COLOR: always

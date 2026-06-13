@@ -121,8 +121,10 @@ make that intent explicit in code rather than allowing warning noise to build up
 The macOS workflow uses path filtering for pull requests. Documentation-only
 changes do not run the expensive model-backed macOS and Metal test job. Code,
 build, dependency, `xtask`, sys-crate, high-level crate, and workflow changes do
-run the full macOS job. Pushes to `main` and `develop` always run the full macOS
-job so integration branches stay verified.
+run the full macOS job. Direct `develop` -> `main` promotion PRs skip the heavy
+pull request test job and rely on the already-green `develop` push run; pushes
+to `main` and `develop` always run the full macOS job so integration branches
+stay verified.
 
 Clippy is used as a CI gate. The baseline is:
 
