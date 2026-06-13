@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - main
-      - feat/macos-build-and-audio-fixes
+      - develop
   pull_request:
     branches:
       - main
+      - develop
 
 jobs:
   test:
