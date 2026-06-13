@@ -10,9 +10,41 @@ on:
       - main
       - develop
 
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    outputs:
+      run_macos: ${{ steps.filter.outputs.run_macos }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Detect relevant changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            run_macos:
+              - ".github/workflows/**"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - "xtask/**"
+              - "whisper-cpp-plus/**"
+              - "whisper-cpp-plus-sys/**"
+
   test:
     name: Test
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.run_macos == 'true'
     runs-on: macos-latest
     env:
       CARGO_TERM_COLOR: always
