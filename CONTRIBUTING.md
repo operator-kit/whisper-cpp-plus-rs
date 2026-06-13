@@ -72,8 +72,13 @@ Release PR flow:
 5. Merge only when the release commit is green and approved.
 6. Tag and publish from `main`.
 
-Prefer squash merges for feature and fix branches unless the branch history is
-intentionally structured and useful to keep.
+Prefer squash merges for short-lived feature, fix, docs, and chore branches
+that target `develop`, unless the branch history is intentionally structured
+and useful to keep.
+
+Do not squash release PRs or direct `develop` -> `main` promotion PRs. Use a
+normal merge commit so `main` and `develop` keep a clean ancestry relationship
+and can be merged back together without duplicating equivalent changes.
 
 ## Quality Gates
 
@@ -142,7 +147,8 @@ The release sequence is:
 3. Bump versions and update release documentation.
 4. Open a release PR into `main`.
 5. Run the publishing guide checklist.
-6. Merge the release PR into `main`.
+6. Merge the release PR into `main` with a normal merge commit, not a squash
+   merge.
 7. Tag the release commit on `main`.
 8. Publish `whisper-cpp-plus-sys` first.
 9. Wait for the crates.io index to show the sys crate.
