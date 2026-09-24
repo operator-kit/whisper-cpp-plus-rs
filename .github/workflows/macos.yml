@@ -79,6 +79,21 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
 
+      # docs.rs has no network access and builds from the published package, which only ships
+      # whisper.cpp's public headers. Simulate that so packaging/header regressions fail here.
+      - name: Check docs.rs build
+        env:
+          DOCS_RS: "1"
+        run: |
+          cargo package -p whisper-cpp-plus-sys --no-verify
+          mkdir -p "$RUNNER_TEMP/docsrs"
+          tar -xzf target/package/whisper-cpp-plus-sys-*.crate -C "$RUNNER_TEMP/docsrs"
+          cargo doc --no-deps \
+            --manifest-path "$(echo "$RUNNER_TEMP"/docsrs/whisper-cpp-plus-sys-*/Cargo.toml)" \
+            --target-dir "$RUNNER_TEMP/docsrs/target"
+          cargo doc --no-deps -p whisper-cpp-plus --all-features \
+            --target-dir "$RUNNER_TEMP/docsrs/target"
+
       - name: Cache test models
         uses: actions/cache@v5
         with:

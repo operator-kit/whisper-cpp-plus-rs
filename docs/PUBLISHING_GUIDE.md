@@ -52,23 +52,24 @@ Update `CHANGELOG.md` with a dated release entry before publishing.
 
 ### 3. Test docs.rs Build Locally
 
-docs.rs runs in a **network-isolated container** - it cannot download dependencies at build time. Our `build.rs` detects `DOCS_RS=1` and generates stub bindings instead of compiling whisper.cpp.
+docs.rs runs in a **network-isolated container**, so it cannot download whisper.cpp at build time. The sys crate package therefore ships only whisper.cpp's public headers (`whisper.cpp/include/*.h`, `whisper.cpp/ggml/include/*.h`) plus whisper.cpp's `LICENSE`. When `build.rs` sees `DOCS_RS=1` it skips compiling whisper.cpp and runs the normal bindgen step against those headers, so docs.rs gets exact bindings with nothing to maintain by hand. The docs.rs image includes libclang (`clang`, `libclang-dev` in [crates-build-env](https://github.com/rust-lang/crates-build-env)).
 
-**Test the stub bindings work:**
+Regular builds of the published crate ignore the packaged headers: `build.rs` only uses the bundled `whisper.cpp/` directory when it contains the full source tree (`CMakeLists.txt` and `src/whisper.cpp`), otherwise it downloads the pinned commit.
+
+**Simulate docs.rs against the packaged crate** (headers only, no network):
 
 ```bash
-# Clean and rebuild with DOCS_RS simulation
-export DOCS_RS=1
-cargo clean -p whisper-cpp-plus-sys
-cargo check -p whisper-cpp-plus
+cargo package -p whisper-cpp-plus-sys --no-verify
+mkdir -p /tmp/wcp-docsrs && tar -xzf target/package/whisper-cpp-plus-sys-X.Y.Z.crate -C /tmp/wcp-docsrs
+DOCS_RS=1 cargo doc --offline --no-deps \
+  --manifest-path /tmp/wcp-docsrs/whisper-cpp-plus-sys-X.Y.Z/Cargo.toml \
+  --target-dir /tmp/wcp-docsrs/target
 
-# Test docs generation
-cargo doc -p whisper-cpp-plus --no-deps
+# The high-level crate, as docs.rs builds it (all features):
+DOCS_RS=1 cargo doc --offline --no-deps -p whisper-cpp-plus --all-features --target-dir /tmp/wcp-docsrs/target
 ```
 
-If this fails, the stub bindings in `whisper-cpp-plus-sys/build.rs` (`generate_stub_bindings()`) need updating to include missing FFI symbols.
-
-Unset `DOCS_RS` before running normal tests again.
+On Windows, GNU tar needs `--force-local` for paths with a drive letter. Use a separate `--target-dir` so the `DOCS_RS` build script run doesn't invalidate your normal build cache.
 
 ### 4. Run Tests
 
@@ -146,24 +147,18 @@ After publishing, monitor the docs.rs build:
 
 1. Check build queue: https://docs.rs/releases/queue
 2. View build status: https://docs.rs/crate/whisper-cpp-plus/VERSION/builds
-3. If build fails, check logs and fix stub bindings
+3. If build fails, check the logs
 
 ### Common docs.rs Failures
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| DNS resolution failed | Network access attempted | Ensure `DOCS_RS` check in build.rs |
-| Cannot find function X | Missing stub binding | Add function to `generate_stub_bindings()` |
-| Type mismatch | Stub signature wrong | Match stub to actual usage in high-level crate |
-| Inner attribute not permitted | `#![allow(...)]` in included file | Remove inner attrs from stub bindings |
+| DNS resolution failed | Network access attempted | Ensure the `DOCS_RS` early return in `build.rs` runs before any download or CMake step |
+| `whisper.h not found` | Headers missing from the package | Check the `include` list in `whisper-cpp-plus-sys/Cargo.toml` and `cargo package -p whisper-cpp-plus-sys --list` |
+| `'<header>.h' file not found` | A packaged header includes a file outside the packaged directories | Add the directory to the sys crate's `include` list |
+| Unable to find libclang | docs.rs image changed | Check [crates-build-env](https://github.com/rust-lang/crates-build-env) and open an issue there |
 
-## Stub Bindings Maintenance
-
-When adding new FFI functions to the high-level crate, also add stubs:
-
-1. Add function to `generate_stub_bindings()` in `whisper-cpp-plus-sys/build.rs`
-2. Match the signature to how the high-level code calls it
-3. Test with `DOCS_RS=1 cargo check -p whisper-cpp-plus`
+New FFI functions need no docs.rs-specific work: bindings are generated from the same headers everywhere.
 
 ## Yanking Bad Releases
 

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On Apple Silicon, upstream's optional ANEForge encoder backend (ggml-org/whisper.cpp#3905) is activated by the `ANEFORGE_ENCODER` and `ANEFORGE_DYLIB` environment variables, which load a dynamic library from the given path when a state is created. It is inactive unless those variables are set.
 - NVIDIA Parakeet support is available in the bundled C library but is not yet exposed through the Rust API.
 - The new upstream VAD segment and VAD-mapped token timestamp accessors are not exposed: they are only populated by upstream's built-in `whisper_full` VAD, which does not run for per-state transcription (`whisper_full_with_state`, used by this crate; see ggml-org/whisper.cpp#3423). Use the crate's own VAD pipeline instead.
+- The `whisper-cpp-plus-sys` package now includes whisper.cpp's public headers (`include/*.h`, `ggml/include/*.h`) and its `LICENSE`. docs.rs builds generate bindings from these headers instead of using hand-written stubs. Regular builds are unchanged: they still download the full pinned whisper.cpp source.
 
 ### Added
 
@@ -26,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed a use-after-free in `FullParams::suppress_regex()`: the regex string was freed immediately after being set, so whisper.cpp read freed memory during transcription.
 - Fixed `FullParams::prompt_tokens()` storing a borrowed pointer that dangled once the caller's slice was dropped or the params were moved or cloned. The tokens are now copied into the params.
 - **Breaking:** `WhisperState` result getters now validate segment and token indices instead of passing them to whisper.cpp, which does not bounds-check (out-of-range indices were undefined behaviour). `full_get_segment_text()` and `full_get_token_text()` return `WhisperError::InvalidParameter`, `full_get_token_data()` returns `None`, and the plain-value getters (`full_get_segment_timestamps()`, `full_get_segment_speaker_turn_next()`, `full_n_tokens()`, `full_get_token_id()`, `full_get_token_prob()`) panic, like slice indexing.
+- Fixed the `whisper-cpp-plus-sys` documentation on docs.rs, which was generated from out-of-date hand-written stubs: it was missing functions, listed functions that no longer exist, and showed some wrong signatures and types. It now matches the real bindings.
 
 ## [0.1.5] - 2026-06-12
 
