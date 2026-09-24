@@ -1,6 +1,6 @@
 # whisper-cpp-plus
 
-> **Pinned to whisper.cpp v1.8.6-stream-pcm** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`ddfe1196`](https://github.com/rmorse/whisper.cpp/commit/ddfe1196ed8e88c670c0c7e3094ed204daf749ac))
+> **Pinned to whisper.cpp 1.9.4-dev** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`de8fb5fd`](https://github.com/rmorse/whisper.cpp/commit/de8fb5fda8b25837a2ba0034c8c24223a6fd6c6c), based on upstream `ggml-org/whisper.cpp` `master` after `v1.9.3`)
 
 Safe Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with real-time PCM streaming and VAD support — OpenAI's Whisper speech recognition model.
 
@@ -226,6 +226,8 @@ for (start, end) in segments.get_all_segments() {
     println!("[{:.1}s-{:.1}s] {}", start, end, text);
 }
 ```
+
+> **Use this crate's VAD, not whisper.cpp's built-in VAD.** Use `WhisperVadProcessor`, `EnhancedWhisperVadProcessor` or `WhisperStreamPcm::with_vad` for voice activity detection. whisper.cpp's built-in `whisper_full` VAD does not run for per-state transcription (`whisper_full_with_state`), which this crate uses for every transcription, so it is intentionally not exposed ([ggml-org/whisper.cpp#3423](https://github.com/ggml-org/whisper.cpp/pull/3423)).
 
 **Enhanced VAD with segment aggregation:**
 
