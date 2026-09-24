@@ -265,12 +265,10 @@ impl WhisperStream {
             return Ok(Vec::new());
         }
 
-        // Clone params so we can set prompt_tokens pointer
+        // Clone params so the per-iteration prompt tokens don't leak into self.params.
+        // prompt_tokens() copies the tokens into the params.
         let mut params = self.params.clone();
 
-        // Set prompt tokens on the clone, pointing to self.prompt_tokens.
-        // The prompt_tokens() method stores a raw pointer. self.prompt_tokens
-        // (Vec<i32>) lives on self and outlives the full() call, so this is safe.
         if !self.config.no_context && !self.prompt_tokens.is_empty() {
             params = params.prompt_tokens(&self.prompt_tokens);
         }

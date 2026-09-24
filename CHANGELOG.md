@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NVIDIA Parakeet support is available in the bundled C library but is not yet exposed through the Rust API.
 - The new upstream VAD segment and VAD-mapped token timestamp accessors are not exposed: they are only populated by upstream's built-in `whisper_full` VAD, which does not run for per-state transcription (`whisper_full_with_state`, used by this crate; see ggml-org/whisper.cpp#3423). Use the crate's own VAD pipeline instead.
 
+### Added
+
+- `WhisperState::full_get_segment_no_speech_prob()`, previously only used internally by the temperature-fallback transcriber.
+
+### Fixed
+
+- **Breaking:** segment timestamps are now real milliseconds. whisper.cpp reports segment times in centiseconds, and the crate previously passed them through unconverted, so `Segment::start_ms`/`end_ms`, `start_seconds()`/`end_seconds()`, `WhisperState::full_get_segment_timestamps()`, and the `start`/`end` values passed to `WhisperStreamPcm::run` callbacks were 10x too small. This affects `transcribe*`, `WhisperStream`, `WhisperStreamPcm`, and the temperature-fallback transcriber. The raw `whisper_token_data` returned by `full_get_token_data()` is unchanged and documented as centiseconds.
+- Fixed a use-after-free in `FullParams::suppress_regex()`: the regex string was freed immediately after being set, so whisper.cpp read freed memory during transcription.
+- Fixed `FullParams::prompt_tokens()` storing a borrowed pointer that dangled once the caller's slice was dropped or the params were moved or cloned. The tokens are now copied into the params.
+- **Breaking:** `WhisperState` result getters now validate segment and token indices instead of passing them to whisper.cpp, which does not bounds-check (out-of-range indices were undefined behaviour). `full_get_segment_text()` and `full_get_token_text()` return `WhisperError::InvalidParameter`, `full_get_token_data()` returns `None`, and the plain-value getters (`full_get_segment_timestamps()`, `full_get_segment_speaker_turn_next()`, `full_n_tokens()`, `full_get_token_id()`, `full_get_token_prob()`) panic, like slice indexing.
+
 ## [0.1.5] - 2026-06-12
 
 ### Added

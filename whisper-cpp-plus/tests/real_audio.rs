@@ -1,5 +1,6 @@
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
-use whisper_cpp_plus::{FullParams, SamplingStrategy, WhisperContext};
+use whisper_cpp_plus::{FullParams, SamplingStrategy, WhisperContext, WhisperState};
 
 /// Find Whisper model (env var or default paths)
 fn find_whisper_model() -> Option<String> {
@@ -133,6 +134,111 @@ fn test_jfk_transcription() {
         );
         assert!(!segment.text.is_empty(), "Segment text should not be empty");
     }
+}
+
+#[test]
+fn test_jfk_segment_times_are_milliseconds() {
+    let Some(model_path) = find_whisper_model() else {
+        eprintln!(
+            "Skipping: model not found. Set WHISPER_TEST_MODEL_DIR or run `cargo xtask test-setup`"
+        );
+        return;
+    };
+    let Some(audio_path) = find_jfk_audio() else {
+        eprintln!("Skipping: JFK audio not found. Set WHISPER_TEST_AUDIO_DIR or run `cargo xtask test-setup`");
+        return;
+    };
+
+    let audio = load_wav_file(&audio_path).expect("Failed to load JFK audio");
+    let audio_ms = audio.len() as i64 * 1000 / 16000;
+
+    let ctx = WhisperContext::new(&model_path).expect("Failed to load model");
+    let result = ctx
+        .transcribe_with_full_params(
+            &audio,
+            FullParams::new(SamplingStrategy::Greedy { best_of: 1 }),
+        )
+        .expect("Failed to transcribe");
+
+    let last = result
+        .segments
+        .last()
+        .expect("Should have at least one segment");
+
+    // jfk.wav is ~11 s. whisper.cpp reports centiseconds; if they leaked through unconverted,
+    // the last segment would end around 1100 instead of 11000.
+    assert!(
+        last.end_ms > audio_ms * 3 / 4 && last.end_ms <= audio_ms + 1000,
+        "last segment ends at {} ms, expected close to the {} ms audio length",
+        last.end_ms,
+        audio_ms
+    );
+    assert!((last.end_seconds() - last.end_ms as f64 / 1000.0).abs() < f64::EPSILON);
+}
+
+#[test]
+fn test_state_getters_reject_out_of_range_indices() {
+    let Some(model_path) = find_whisper_model() else {
+        eprintln!(
+            "Skipping: model not found. Set WHISPER_TEST_MODEL_DIR or run `cargo xtask test-setup`"
+        );
+        return;
+    };
+    let Some(audio_path) = find_jfk_audio() else {
+        eprintln!("Skipping: JFK audio not found. Set WHISPER_TEST_AUDIO_DIR or run `cargo xtask test-setup`");
+        return;
+    };
+
+    let audio = load_wav_file(&audio_path).expect("Failed to load JFK audio");
+    let ctx = WhisperContext::new(&model_path).expect("Failed to load model");
+    let mut state = WhisperState::new(&ctx).expect("Failed to create state");
+    state
+        .full(
+            FullParams::new(SamplingStrategy::Greedy { best_of: 1 }),
+            &audio,
+        )
+        .expect("Failed to transcribe");
+
+    let n_segments = state.full_n_segments();
+    assert!(n_segments > 0);
+    let n_tokens = state.full_n_tokens(0);
+    assert!(n_tokens > 0);
+
+    // In-range access works.
+    assert!(state.full_get_segment_text(0).is_ok());
+    assert!(state.full_get_token_text(0, 0).is_ok());
+    assert!(state.full_get_token_data(0, 0).is_some());
+    let no_speech = state.full_get_segment_no_speech_prob(0);
+    assert!((0.0..=1.0).contains(&no_speech));
+
+    // Result/Option getters report out-of-range indices.
+    assert!(state.full_get_segment_text(n_segments).is_err());
+    assert!(state.full_get_segment_text(-1).is_err());
+    assert!(state.full_get_token_text(0, n_tokens).is_err());
+    assert!(state.full_get_token_text(n_segments, 0).is_err());
+    assert!(state.full_get_token_data(0, n_tokens).is_none());
+    assert!(state.full_get_token_data(0, -1).is_none());
+
+    // Plain-value getters panic instead of reading out of bounds in C.
+    let panics = |f: &dyn Fn()| catch_unwind(AssertUnwindSafe(f)).is_err();
+    assert!(panics(&|| {
+        state.full_get_segment_timestamps(n_segments);
+    }));
+    assert!(panics(&|| {
+        state.full_get_segment_speaker_turn_next(-1);
+    }));
+    assert!(panics(&|| {
+        state.full_get_segment_no_speech_prob(n_segments);
+    }));
+    assert!(panics(&|| {
+        state.full_n_tokens(n_segments);
+    }));
+    assert!(panics(&|| {
+        state.full_get_token_id(0, n_tokens);
+    }));
+    assert!(panics(&|| {
+        state.full_get_token_prob(0, n_tokens);
+    }));
 }
 
 #[test]
