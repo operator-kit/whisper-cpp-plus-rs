@@ -10,8 +10,12 @@ pub enum SamplingStrategy {
 #[derive(Clone)]
 pub struct FullParams {
     pub(crate) inner: ffi::whisper_full_params,
+    // Data referenced by pointer fields in `inner` is owned here and wired up in `as_raw`, so
+    // the pointers stay valid across moves and clones.
     language: Option<CString>,
     initial_prompt: Option<CString>,
+    suppress_regex: Option<CString>,
+    prompt_tokens: Vec<i32>,
 }
 
 // FullParams is Send and Sync because we only use it in controlled contexts
@@ -43,6 +47,8 @@ impl FullParams {
             inner,
             language: None,
             initial_prompt: None,
+            suppress_regex: None,
+            prompt_tokens: Vec::new(),
         };
 
         params.inner.n_threads = (num_cpus::get() / 2).max(1) as i32;
@@ -66,14 +72,24 @@ impl FullParams {
             params.initial_prompt = prompt.as_ptr();
         }
 
+        params.suppress_regex = self
+            .suppress_regex
+            .as_ref()
+            .map_or(std::ptr::null(), |regex| regex.as_ptr());
+
+        if self.prompt_tokens.is_empty() {
+            params.prompt_tokens = std::ptr::null();
+            params.prompt_n_tokens = 0;
+        } else {
+            params.prompt_tokens = self.prompt_tokens.as_ptr();
+            params.prompt_n_tokens = self.prompt_tokens.len() as i32;
+        }
+
         params
     }
 
     pub fn language(mut self, lang: &str) -> Self {
         self.language = CString::new(lang).ok();
-        if let Some(ref lang_cstr) = self.language {
-            self.inner.language = lang_cstr.as_ptr();
-        }
         self
     }
 
@@ -162,28 +178,29 @@ impl FullParams {
         self
     }
 
+    /// Suppress tokens matching `suppress_regex`; `None` clears it.
+    ///
+    /// A regex containing an interior NUL byte cannot be passed to C and is ignored.
     pub fn suppress_regex(mut self, suppress_regex: Option<&str>) -> Self {
-        if let Some(regex) = suppress_regex {
-            if let Ok(c_regex) = CString::new(regex) {
-                self.inner.suppress_regex = c_regex.as_ptr();
+        match suppress_regex {
+            Some(regex) => {
+                if let Ok(c_regex) = CString::new(regex) {
+                    self.suppress_regex = Some(c_regex);
+                }
             }
-        } else {
-            self.inner.suppress_regex = std::ptr::null();
+            None => self.suppress_regex = None,
         }
         self
     }
 
     pub fn initial_prompt(mut self, prompt: &str) -> Self {
         self.initial_prompt = CString::new(prompt).ok();
-        if let Some(ref prompt_cstr) = self.initial_prompt {
-            self.inner.initial_prompt = prompt_cstr.as_ptr();
-        }
         self
     }
 
+    /// Prompt the decoder with these tokens. The tokens are copied.
     pub fn prompt_tokens(mut self, tokens: &[i32]) -> Self {
-        self.inner.prompt_tokens = tokens.as_ptr();
-        self.inner.prompt_n_tokens = tokens.len() as i32;
+        self.prompt_tokens = tokens.to_vec();
         self
     }
 
@@ -311,5 +328,62 @@ impl TranscriptionParamsBuilder {
 impl Default for TranscriptionParamsBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CStr;
+
+    fn raw_str(ptr: *const std::os::raw::c_char) -> String {
+        assert!(!ptr.is_null());
+        unsafe { CStr::from_ptr(ptr) }.to_str().unwrap().to_owned()
+    }
+
+    #[test]
+    fn string_params_survive_clone_and_drop() {
+        let original = FullParams::default()
+            .language("de")
+            .initial_prompt("hello")
+            .suppress_regex(Some("[0-9]+"));
+        let cloned = original.clone();
+        drop(original);
+
+        let raw = cloned.as_raw();
+        assert_eq!(raw_str(raw.language), "de");
+        assert_eq!(raw_str(raw.initial_prompt), "hello");
+        assert_eq!(raw_str(raw.suppress_regex), "[0-9]+");
+    }
+
+    #[test]
+    fn suppress_regex_none_clears() {
+        let params = FullParams::default()
+            .suppress_regex(Some("abc"))
+            .suppress_regex(None);
+        assert!(params.as_raw().suppress_regex.is_null());
+        assert!(FullParams::default().as_raw().suppress_regex.is_null());
+    }
+
+    #[test]
+    fn prompt_tokens_are_owned() {
+        let params = {
+            let tokens = vec![50257, 1, 2, 3];
+            FullParams::default().prompt_tokens(&tokens)
+        };
+        let cloned = params.clone();
+        drop(params);
+
+        let raw = cloned.as_raw();
+        assert_eq!(raw.prompt_n_tokens, 4);
+        let tokens = unsafe { std::slice::from_raw_parts(raw.prompt_tokens, 4) };
+        assert_eq!(tokens, &[50257, 1, 2, 3]);
+    }
+
+    #[test]
+    fn empty_prompt_tokens_are_null() {
+        let raw = FullParams::default().prompt_tokens(&[]).as_raw();
+        assert!(raw.prompt_tokens.is_null());
+        assert_eq!(raw.prompt_n_tokens, 0);
     }
 }

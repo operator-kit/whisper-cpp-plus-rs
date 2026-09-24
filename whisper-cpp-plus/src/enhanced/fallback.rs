@@ -6,7 +6,6 @@ use crate::{FullParams, Result, Segment, TranscriptionResult, WhisperError, Whis
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use std::io::Write;
-use whisper_cpp_plus_sys as ffi;
 
 /// Quality thresholds for transcription validation
 #[derive(Debug, Clone)]
@@ -166,10 +165,7 @@ impl<'a> EnhancedWhisperState<'a> {
 
     /// Get no-speech probability for a segment (enhanced feature)
     fn get_no_speech_prob(&self, segment_idx: i32) -> f32 {
-        unsafe {
-            // Direct FFI call using the exposed ptr
-            ffi::whisper_full_get_segment_no_speech_prob_from_state(self.state.ptr, segment_idx)
-        }
+        self.state.full_get_segment_no_speech_prob(segment_idx)
     }
 
     /// Calculate average log probability from token probabilities

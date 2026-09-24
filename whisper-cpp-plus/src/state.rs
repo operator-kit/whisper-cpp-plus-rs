@@ -102,7 +102,48 @@ impl WhisperState {
         unsafe { ffi::whisper_full_lang_id_from_state(self.ptr) }
     }
 
+    // The whisper.cpp result getters index their vectors without bounds checks, so every
+    // wrapper validates indices before calling into C.
+
+    fn segment_in_range(&self, i_segment: i32) -> bool {
+        i_segment >= 0 && i_segment < self.full_n_segments()
+    }
+
+    fn token_in_range(&self, i_segment: i32, i_token: i32) -> bool {
+        self.segment_in_range(i_segment)
+            && i_token >= 0
+            && i_token < unsafe { ffi::whisper_full_n_tokens_from_state(self.ptr, i_segment) }
+    }
+
+    fn assert_segment_in_range(&self, i_segment: i32) {
+        assert!(
+            self.segment_in_range(i_segment),
+            "segment index {} out of range (n_segments = {})",
+            i_segment,
+            self.full_n_segments()
+        );
+    }
+
+    fn assert_token_in_range(&self, i_segment: i32, i_token: i32) {
+        assert!(
+            self.token_in_range(i_segment, i_token),
+            "token index ({}, {}) out of range",
+            i_segment,
+            i_token
+        );
+    }
+
+    /// Returns the text of segment `i_segment`.
+    ///
+    /// Returns [`WhisperError::InvalidParameter`] if the index is out of range.
     pub fn full_get_segment_text(&self, i_segment: i32) -> Result<String> {
+        if !self.segment_in_range(i_segment) {
+            return Err(WhisperError::InvalidParameter(format!(
+                "segment index {} out of range",
+                i_segment
+            )));
+        }
+
         let text_ptr =
             unsafe { ffi::whisper_full_get_segment_text_from_state(self.ptr, i_segment) };
 
@@ -114,23 +155,62 @@ impl WhisperState {
         Ok(c_str.to_string_lossy().into_owned())
     }
 
+    /// Returns the `(start, end)` time of segment `i_segment` in milliseconds.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i_segment` is out of range.
     pub fn full_get_segment_timestamps(&self, i_segment: i32) -> (i64, i64) {
+        self.assert_segment_in_range(i_segment);
+        // whisper.cpp reports segment times in centiseconds (10 ms units).
         unsafe {
             let t0 = ffi::whisper_full_get_segment_t0_from_state(self.ptr, i_segment);
             let t1 = ffi::whisper_full_get_segment_t1_from_state(self.ptr, i_segment);
-            (t0, t1)
+            (t0 * 10, t1 * 10)
         }
     }
 
+    /// Returns whether the next segment starts with a speaker turn (tinydiarize).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i_segment` is out of range.
     pub fn full_get_segment_speaker_turn_next(&self, i_segment: i32) -> bool {
+        self.assert_segment_in_range(i_segment);
         unsafe { ffi::whisper_full_get_segment_speaker_turn_next_from_state(self.ptr, i_segment) }
     }
 
+    /// Returns the no-speech probability of segment `i_segment`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i_segment` is out of range.
+    pub fn full_get_segment_no_speech_prob(&self, i_segment: i32) -> f32 {
+        self.assert_segment_in_range(i_segment);
+        unsafe { ffi::whisper_full_get_segment_no_speech_prob_from_state(self.ptr, i_segment) }
+    }
+
+    /// Returns the number of tokens in segment `i_segment`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i_segment` is out of range.
     pub fn full_n_tokens(&self, i_segment: i32) -> i32 {
+        self.assert_segment_in_range(i_segment);
         unsafe { ffi::whisper_full_n_tokens_from_state(self.ptr, i_segment) }
     }
 
+    /// Returns the text of token `i_token` in segment `i_segment`.
+    ///
+    /// Returns [`WhisperError::InvalidParameter`] if either index is out of range.
     pub fn full_get_token_text(&self, i_segment: i32, i_token: i32) -> Result<String> {
+        if !self.token_in_range(i_segment, i_token) {
+            return Err(WhisperError::InvalidParameter(format!(
+                "token index ({}, {}) out of range",
+                i_segment, i_token
+            )));
+        }
+
         let text_ptr = unsafe {
             ffi::whisper_full_get_token_text_from_state(
                 self._context.0,
@@ -148,26 +228,40 @@ impl WhisperState {
         Ok(c_str.to_string_lossy().into_owned())
     }
 
+    /// Returns the id of token `i_token` in segment `i_segment`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either index is out of range.
     pub fn full_get_token_id(&self, i_segment: i32, i_token: i32) -> i32 {
+        self.assert_token_in_range(i_segment, i_token);
         unsafe { ffi::whisper_full_get_token_id_from_state(self.ptr, i_segment, i_token) }
     }
 
+    /// Returns the raw token data for token `i_token` in segment `i_segment`, or `None` if
+    /// either index is out of range.
+    ///
+    /// This is the unmodified whisper.cpp struct: its `t0`, `t1` and `t_dtw` fields are in
+    /// centiseconds (10 ms units), unlike [`WhisperState::full_get_segment_timestamps`].
     pub fn full_get_token_data(
         &self,
         i_segment: i32,
         i_token: i32,
     ) -> Option<ffi::whisper_token_data> {
-        let data =
-            unsafe { ffi::whisper_full_get_token_data_from_state(self.ptr, i_segment, i_token) };
-
-        if data.id == -1 {
-            None
-        } else {
-            Some(data)
+        if !self.token_in_range(i_segment, i_token) {
+            return None;
         }
+
+        Some(unsafe { ffi::whisper_full_get_token_data_from_state(self.ptr, i_segment, i_token) })
     }
 
+    /// Returns the probability of token `i_token` in segment `i_segment`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either index is out of range.
     pub fn full_get_token_prob(&self, i_segment: i32, i_token: i32) -> f32 {
+        self.assert_token_in_range(i_segment, i_token);
         unsafe { ffi::whisper_full_get_token_p_from_state(self.ptr, i_segment, i_token) }
     }
 }
