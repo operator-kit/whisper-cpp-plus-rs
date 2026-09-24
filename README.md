@@ -227,6 +227,8 @@ for (start, end) in segments.get_all_segments() {
 }
 ```
 
+> **Use this crate's VAD, not whisper.cpp's built-in VAD.** Use `WhisperVadProcessor`, `EnhancedWhisperVadProcessor` or `WhisperStreamPcm::with_vad` for voice activity detection. whisper.cpp's built-in `whisper_full` VAD does not run for per-state transcription (`whisper_full_with_state`), which this crate uses for every transcription, so it is intentionally not exposed ([ggml-org/whisper.cpp#3423](https://github.com/ggml-org/whisper.cpp/pull/3423)).
+
 **Enhanced VAD with segment aggregation:**
 
 ```rust

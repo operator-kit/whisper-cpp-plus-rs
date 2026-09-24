@@ -110,7 +110,7 @@ whisper-cpp-plus = { version = "0.1.5", features = ["cuda"] }
 - **Transcription** — `WhisperContext`, `WhisperState`, `FullParams`, `TranscriptionParams` builder
 - **Streaming** — `WhisperStream` for chunked real-time transcription
 - **StreamPCM** — `WhisperStreamPcm` for raw PCM input with VAD-driven processing
-- **VAD** — `WhisperVadProcessor` for Silero-based voice activity detection
+- **VAD** — `WhisperVadProcessor` for Silero-based voice activity detection. Use this (or `WhisperStreamPcm::with_vad` / the enhanced VAD) rather than whisper.cpp's built-in `whisper_full` VAD, which does not run for the per-state transcription this crate uses ([ggml-org/whisper.cpp#3423](https://github.com/ggml-org/whisper.cpp/pull/3423))
 - **Enhanced** — Temperature fallback + enhanced VAD aggregation for improved quality
 - **Quantization** — `WhisperQuantize` for model compression (feature = `quantization`)
 
