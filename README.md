@@ -1,6 +1,6 @@
 # whisper-cpp-plus
 
-> **Pinned to whisper.cpp v1.8.6-stream-pcm** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`ddfe1196`](https://github.com/rmorse/whisper.cpp/commit/ddfe1196ed8e88c670c0c7e3094ed204daf749ac))
+> **Pinned to whisper.cpp 1.9.4-dev** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`de8fb5fd`](https://github.com/rmorse/whisper.cpp/commit/de8fb5fda8b25837a2ba0034c8c24223a6fd6c6c), based on upstream `ggml-org/whisper.cpp` `master` after `v1.9.3`)
 
 Safe Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with real-time PCM streaming and VAD support — OpenAI's Whisper speech recognition model.
 

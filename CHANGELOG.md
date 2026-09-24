@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No unreleased changes.
+### Changed
+
+- Updated the pinned whisper.cpp fork to `rmorse/whisper.cpp` `stream-pcm` at `de8fb5fd` (whisper.cpp `1.9.4-dev`), based on upstream `ggml-org/whisper.cpp` `master` after `v1.9.3`. This picks up upstream releases `v1.8.7` through `v1.9.3` and ggml `0.25.1`.
+- The upstream additions in this range (NVIDIA Parakeet support, VAD-mapped token timestamps, and internal VAD segment accessors) are available in the bundled C library but are not yet exposed through the Rust API.
+
+### Fixed
+
+- Fixed corrupted segment timestamps for long audio when using parallel transcription (`whisper_full_parallel`), via upstream ggml-org/whisper.cpp#4044.
 
 ## [0.1.5] - 2026-06-12
 
