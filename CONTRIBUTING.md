@@ -97,6 +97,13 @@ cargo clippy -p whisper-cpp-plus --all-targets --features async -- -D warnings
 cargo test -p whisper-cpp-plus --features async -- --test-threads=1
 ```
 
+For logging (`log` feature) changes:
+
+```bash
+cargo clippy -p whisper-cpp-plus --all-targets --features log -- -D warnings
+cargo test -p whisper-cpp-plus --features log --test logging_log_crate -- --test-threads=1
+```
+
 For macOS or Metal-sensitive changes:
 
 ```bash

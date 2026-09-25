@@ -49,6 +49,7 @@
 
 mod context;
 mod error;
+mod logging;
 mod params;
 mod state;
 mod stream;
@@ -67,6 +68,7 @@ mod async_api;
 
 pub use context::WhisperContext;
 pub use error::{Result, WhisperError};
+pub use logging::{LogLevel, WhisperLog};
 pub use params::{FullParams, SamplingStrategy, TranscriptionParams, TranscriptionParamsBuilder};
 #[cfg(feature = "quantization")]
 pub use quantize::{QuantizationType, QuantizeError, WhisperQuantize};

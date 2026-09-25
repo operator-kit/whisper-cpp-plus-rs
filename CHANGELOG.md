@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `WhisperState::full_get_segment_no_speech_prob()`, previously only used internally by the temperature-fallback transcriber.
+- `WhisperLog` (wrapping `whisper_log_set`) to control whisper.cpp's log output, which covers whisper.cpp, its VAD and the ggml backends: `WhisperLog::set()` routes messages to a Rust callback with a `LogLevel`, `WhisperLog::disable()` silences them, and `WhisperLog::reset()` restores the default stderr output.
+- `log` feature: `WhisperLog::use_log_crate()` forwards whisper.cpp log output to the `log` crate with target `whisper_cpp`.
 
 ### Fixed
 

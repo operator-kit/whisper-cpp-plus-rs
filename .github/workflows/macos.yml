@@ -74,6 +74,9 @@ jobs:
       - name: Check async Clippy
         run: cargo clippy -p whisper-cpp-plus --all-targets --features async -- -D warnings
 
+      - name: Check log Clippy
+        run: cargo clippy -p whisper-cpp-plus --all-targets --features log -- -D warnings
+
       - name: Check Metal Clippy
         run: cargo clippy -p whisper-cpp-plus --all-targets --features metal -- -D warnings
         env:
@@ -147,6 +150,9 @@ jobs:
 
       - name: Test workspace
         run: cargo test --workspace -- --test-threads=1
+
+      - name: Test log feature
+        run: cargo test -p whisper-cpp-plus --features log --test logging_log_crate -- --test-threads=1
 
       - name: Test Metal feature
         run: cargo test -p whisper-cpp-plus --features metal -- --test-threads=1

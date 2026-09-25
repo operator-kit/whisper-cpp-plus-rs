@@ -35,6 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **Async** — `tokio::spawn_blocking` wrappers (feature = `async`)
 - **Cross-platform** — Windows (MSVC), Linux, macOS (Intel & Apple Silicon)
 - **Quantization** — model compression via `WhisperQuantize` (feature = `quantization`)
+- **Logging control** — redirect, silence, or forward whisper.cpp's log output via `WhisperLog` (`log` crate integration with feature = `log`)
 - **Hardware acceleration** — SIMD auto-detected, GPU via feature flags
 
 ## Installation
@@ -60,6 +61,7 @@ whisper-cpp-plus = { version = "0.1.5", features = ["quantization"] }  # Model q
 whisper-cpp-plus = { version = "0.1.5", features = ["async"] }         # Async API
 whisper-cpp-plus = { version = "0.1.5", features = ["cuda"] }          # NVIDIA GPU
 whisper-cpp-plus = { version = "0.1.5", features = ["metal"] }         # macOS GPU
+whisper-cpp-plus = { version = "0.1.5", features = ["log"] }           # Forward logs to the `log` crate
 ```
 
 ### CUDA GPU Acceleration
@@ -252,6 +254,30 @@ let params = TranscriptionParams::builder()
     .build();
 let result = ctx.transcribe_with_params_enhanced(&audio, params)?;
 // Automatically retries with higher temperatures if quality thresholds aren't met
+```
+
+**Controlling whisper.cpp log output:**
+
+whisper.cpp prints model-loading and processing details to stderr by default. Configure `WhisperLog` once at startup, before loading models:
+
+```rust
+use whisper_cpp_plus::{LogLevel, WhisperLog};
+
+// Silence whisper.cpp entirely
+WhisperLog::disable();
+
+// ...or route messages to your own handler
+WhisperLog::set(|level, message| {
+    if level >= LogLevel::Warn {
+        eprintln!("[whisper.cpp {:?}] {}", level, message);
+    }
+});
+
+// ...or, with feature = "log", forward to the `log` crate (target "whisper_cpp")
+// WhisperLog::use_log_crate();
+
+// Restore the default stderr output
+WhisperLog::reset();
 ```
 
 More examples in [`whisper-cpp-plus/examples/`](./whisper-cpp-plus/examples/).

@@ -19,6 +19,7 @@ flate2 = "1.0"
 
 # Optional dependencies
 tokio = { version = "1.35", features = ["full"], optional = true }
+log = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.35", features = ["full"] }
@@ -33,6 +34,7 @@ cuda = ["whisper-cpp-plus-sys/cuda"]
 metal = ["whisper-cpp-plus-sys/metal"]
 openblas = ["whisper-cpp-plus-sys/openblas"]
 async = ["tokio"]
+log = ["dep:log"]
 
 [[example]]
 name = "basic"

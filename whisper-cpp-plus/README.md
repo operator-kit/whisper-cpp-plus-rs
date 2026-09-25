@@ -98,6 +98,7 @@ while let Some(segments) = stream.process_step()? {
 | `metal` | Apple Metal acceleration (macOS) |
 | `openblas` | OpenBLAS acceleration (Linux) |
 | `async` | Async transcription API via tokio |
+| `log` | Forward whisper.cpp log output to the `log` crate (`WhisperLog::use_log_crate`) |
 
 Enable in `Cargo.toml`:
 ```toml
@@ -113,6 +114,7 @@ whisper-cpp-plus = { version = "0.1.5", features = ["cuda"] }
 - **VAD** — `WhisperVadProcessor` for Silero-based voice activity detection. Use this (or `WhisperStreamPcm::with_vad` / the enhanced VAD) rather than whisper.cpp's built-in `whisper_full` VAD, which does not run for the per-state transcription this crate uses ([ggml-org/whisper.cpp#3423](https://github.com/ggml-org/whisper.cpp/pull/3423))
 - **Enhanced** — Temperature fallback + enhanced VAD aggregation for improved quality
 - **Quantization** — `WhisperQuantize` for model compression (feature = `quantization`)
+- **Logging** — `WhisperLog` to redirect, silence, or forward whisper.cpp's log output (`log` crate integration with feature = `log`)
 
 ## Examples
 
