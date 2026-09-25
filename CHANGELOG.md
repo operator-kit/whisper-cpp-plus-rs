@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NVIDIA Parakeet support is available in the bundled C library but is not yet exposed through the Rust API.
 - The new upstream VAD segment and VAD-mapped token timestamp accessors are not exposed: they are only populated by upstream's built-in `whisper_full` VAD, which does not run for per-state transcription (`whisper_full_with_state`, used by this crate; see ggml-org/whisper.cpp#3423). Use the crate's own VAD pipeline instead.
 - The `whisper-cpp-plus-sys` package now includes whisper.cpp's public headers (`include/*.h`, `ggml/include/*.h`) and its `LICENSE`. docs.rs builds generate bindings from these headers instead of using hand-written stubs. Regular builds are unchanged: they still download the full pinned whisper.cpp source.
+- `WhisperContext` no longer allocates whisper.cpp's default state, which the crate never used (all transcription runs on explicit `WhisperState`s). This saves that state's KV caches and compute buffers for every loaded context: about 146 MB with `ggml-tiny.en.bin` as reported by whisper.cpp, and considerably more for larger models.
+
+### Removed
+
+- **Breaking:** `WhisperState::full_parallel()`. It never returned correct results: whisper.cpp writes parallel results to the context's default state, which the method never read. Use `WhisperContext::full_parallel()`, which returns the merged `TranscriptionResult`.
+- **Breaking:** `WhisperContext::n_len()`. It reported the mel length of the context's default state, which the crate never transcribes on. Use `WhisperState::n_len()` for the state you transcribed with.
 
 ### Added
 
@@ -23,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WhisperLog` (wrapping `whisper_log_set`) to control whisper.cpp's log output, which covers whisper.cpp, its VAD and the ggml backends: `WhisperLog::set()` routes messages to a Rust callback with a `LogLevel`, `WhisperLog::disable()` silences them, and `WhisperLog::reset()` restores the default stderr output.
 - `log` feature: `WhisperLog::use_log_crate()` forwards whisper.cpp log output to the `log` crate with target `whisper_cpp`.
 - `WhisperVadProcessor::detect_speech_no_reset()` and `reset_state()` (wrapping `whisper_vad_detect_speech_no_reset` / `whisper_vad_reset_state`) for streaming Silero VAD that keeps its state across chunks, plus `WhisperVadProcessor::WINDOW_SAMPLES` (512 samples per probability).
+- `WhisperContext::full_parallel(params, audio, n_processors)`: splits audio into equal chunks, transcribes them concurrently on separate states, and returns the merged `TranscriptionResult` with times on the original timeline. Chunking follows whisper.cpp's `whisper_full_parallel`; in addition, segment times are clamped to their chunk, so whisper reporting a segment end past its audio can no longer push the next chunk's segments later. Words that straddle a chunk boundary may still be cut or misrecognised.
+- `WhisperState::n_len()`: mel length of the last transcription on the state (`whisper_n_len_from_state`).
 
 ### Fixed
 

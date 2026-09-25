@@ -31,8 +31,10 @@ impl WhisperContext {
 
         let c_path = std::ffi::CString::new(path_str)?;
 
+        // All transcription runs on explicit `WhisperState`s, so don't allocate whisper.cpp's
+        // default state (KV caches and compute buffers) for the context.
         let ptr = unsafe {
-            ffi::whisper_init_from_file_with_params(
+            ffi::whisper_init_from_file_with_params_no_state(
                 c_path.as_ptr(),
                 ffi::whisper_context_default_params(),
             )
@@ -49,7 +51,7 @@ impl WhisperContext {
 
     pub fn new_from_buffer(buffer: &[u8]) -> Result<Self> {
         let ptr = unsafe {
-            ffi::whisper_init_from_buffer_with_params(
+            ffi::whisper_init_from_buffer_with_params_no_state(
                 buffer.as_ptr() as *mut std::os::raw::c_void,
                 buffer.len(),
                 ffi::whisper_context_default_params(),
@@ -81,10 +83,6 @@ impl WhisperContext {
 
     pub fn n_text_ctx(&self) -> i32 {
         unsafe { ffi::whisper_n_text_ctx(self.ptr.0) }
-    }
-
-    pub fn n_len(&self) -> i32 {
-        unsafe { ffi::whisper_n_len(self.ptr.0) }
     }
 }
 

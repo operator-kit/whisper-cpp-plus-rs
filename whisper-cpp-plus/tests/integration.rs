@@ -144,8 +144,7 @@ fn test_model_info() {
     assert!(ctx.n_audio_ctx() > 0, "n_audio_ctx should be positive");
     assert!(ctx.n_text_ctx() > 0, "n_text_ctx should be positive");
 
-    // Note: n_len() returns mel spectrogram length, which is 0 until audio is processed.
-    // It's a state property, not a model property - don't test it here.
+    // n_len (mel length of the last transcription) is per-state: see WhisperState::n_len.
 
     // tiny.en model is English-only
     assert!(!ctx.is_multilingual());
