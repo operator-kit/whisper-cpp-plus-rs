@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Updated the pinned whisper.cpp fork to `rmorse/whisper.cpp` `stream-pcm` at `de8fb5fd` (tag `v1.9.4-dev-stream-pcm`, whisper.cpp `1.9.4-dev`), based on upstream `ggml-org/whisper.cpp` `master` after `v1.9.3`. This picks up upstream releases `v1.8.7` through `v1.9.3` and ggml `0.25.1`.
+- Updated the pinned whisper.cpp fork to `rmorse/whisper.cpp` `stream-pcm` at `de8fb5fd` (tag `v1.9.4-dev-stream-pcm`), based on upstream `ggml-org/whisper.cpp` `master` after the `v1.9.4` release (`v1.9.4` plus 181 later upstream commits). This picks up upstream releases `v1.8.7` through `v1.9.4` and ggml `0.25.1`.
 - Upstream now re-seeds the decoder between calls (ggml-org/whisper.cpp#4025), so temperature-fallback output is deterministic across repeated transcriptions on the same state.
 - Upstream now rejects Silero VAD models whose encoder does not have exactly 4 layers (ggml-org/whisper.cpp#4064); loading such a model with `WhisperVadProcessor` now fails at load time.
 - On Apple Silicon, upstream's optional ANEForge encoder backend (ggml-org/whisper.cpp#3905) is activated by the `ANEFORGE_ENCODER` and `ANEFORGE_DYLIB` environment variables, which load a dynamic library from the given path when a state is created. It is inactive unless those variables are set.
