@@ -460,3 +460,109 @@ mod rand {
         })
     }
 }
+
+/// Average of the full-pass window probabilities whose window starts inside `[start, end)`.
+fn reference_probe_avg(full: &[f32], window: usize, start: usize, end: usize) -> f32 {
+    // Round up without usize::div_ceil (MSRV 1.70).
+    let first = (start + window - 1) / window;
+    let last = ((end + window - 1) / window).min(full.len());
+    let probs = &full[first.min(last)..last];
+    if probs.is_empty() {
+        0.0
+    } else {
+        probs.iter().sum::<f32>() / probs.len() as f32
+    }
+}
+
+#[test]
+fn test_streaming_vad_matches_full_pass() {
+    let Some(vad_path) = find_vad_model() else {
+        eprintln!("Skipping: VAD model not found. Run `cargo xtask test-setup`");
+        return;
+    };
+    let Some(audio_path) = find_jfk_audio() else {
+        eprintln!("Skipping: JFK audio not found. Run `cargo xtask test-setup`");
+        return;
+    };
+
+    let window = WhisperVadProcessor::WINDOW_SAMPLES;
+    let audio = load_wav_16khz_mono(&audio_path).expect("Failed to load audio");
+    let audio = &audio[..audio.len() / window * window];
+
+    // WhisperStreamPcm defaults: 200 ms probes, 0.6 speech threshold.
+    let probe = 3200;
+    let thold = 0.6;
+
+    let mut vad = WhisperVadProcessor::new(&vad_path).expect("Failed to load VAD model");
+
+    // Reference: one pass over the whole file.
+    assert!(vad.detect_speech(audio));
+    let full = vad.get_probs();
+    assert_eq!(full.len(), audio.len() / window);
+
+    // Streaming without resets, feeding whole windows and carrying the remainder.
+    vad.reset_state();
+    let mut streamed = Vec::new();
+    let mut streamed_probe_avgs = Vec::new();
+    let mut carry = Vec::new();
+    for chunk in audio.chunks(probe) {
+        carry.extend_from_slice(chunk);
+        let whole = carry.len() / window * window;
+        if whole == 0 {
+            streamed_probe_avgs.push(None);
+            continue;
+        }
+        assert!(vad.detect_speech_no_reset(&carry[..whole]));
+        let probs = vad.get_probs();
+        streamed_probe_avgs.push(Some(probs.iter().sum::<f32>() / probs.len() as f32));
+        streamed.extend(probs);
+        carry.drain(..whole);
+    }
+
+    // Same LSTM input sequence as the full pass, so the probabilities must match.
+    assert_eq!(streamed.len(), full.len());
+    let max_diff = streamed
+        .iter()
+        .zip(&full)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f32, f32::max);
+    assert!(
+        max_diff < 1e-4,
+        "streamed probabilities differ from the full pass by up to {max_diff}"
+    );
+
+    // Per-probe decisions: previous reset-per-probe behaviour vs streaming, against the
+    // full-pass reference. Printed for comparison; only streaming is asserted.
+    let mut reset_mismatches = 0;
+    let mut stream_mismatches = 0;
+    let mut reset_abs_err = 0.0f32;
+    let mut stream_abs_err = 0.0f32;
+    let n_probes = audio.chunks(probe).count();
+    for (i, chunk) in audio.chunks(probe).enumerate() {
+        let start = i * probe;
+        let reference = reference_probe_avg(&full, window, start, start + chunk.len());
+
+        assert!(vad.detect_speech(chunk));
+        let probs = vad.get_probs();
+        let reset_avg = probs.iter().sum::<f32>() / probs.len() as f32;
+        reset_abs_err += (reset_avg - reference).abs();
+        if (reset_avg < thold) != (reference < thold) {
+            reset_mismatches += 1;
+        }
+
+        if let Some(stream_avg) = streamed_probe_avgs[i] {
+            stream_abs_err += (stream_avg - reference).abs();
+            if (stream_avg < thold) != (reference < thold) {
+                stream_mismatches += 1;
+            }
+        }
+    }
+
+    println!(
+        "{n_probes} probes of {probe} samples: reset-per-probe mean abs error {:.3}, \
+         {reset_mismatches} speech/silence decisions differ from the full pass; \
+         streaming mean abs error {:.3}, {stream_mismatches} differ",
+        reset_abs_err / n_probes as f32,
+        stream_abs_err / n_probes as f32,
+    );
+}

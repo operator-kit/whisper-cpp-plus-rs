@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WhisperState::full_get_segment_no_speech_prob()`, previously only used internally by the temperature-fallback transcriber.
 - `WhisperLog` (wrapping `whisper_log_set`) to control whisper.cpp's log output, which covers whisper.cpp, its VAD and the ggml backends: `WhisperLog::set()` routes messages to a Rust callback with a `LogLevel`, `WhisperLog::disable()` silences them, and `WhisperLog::reset()` restores the default stderr output.
 - `log` feature: `WhisperLog::use_log_crate()` forwards whisper.cpp log output to the `log` crate with target `whisper_cpp`.
+- `WhisperVadProcessor::detect_speech_no_reset()` and `reset_state()` (wrapping `whisper_vad_detect_speech_no_reset` / `whisper_vad_reset_state`) for streaming Silero VAD that keeps its state across chunks, plus `WhisperVadProcessor::WINDOW_SAMPLES` (512 samples per probability).
 
 ### Fixed
 
@@ -29,7 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed a use-after-free in `FullParams::suppress_regex()`: the regex string was freed immediately after being set, so whisper.cpp read freed memory during transcription.
 - Fixed `FullParams::prompt_tokens()` storing a borrowed pointer that dangled once the caller's slice was dropped or the params were moved or cloned. The tokens are now copied into the params.
 - **Breaking:** `WhisperState` result getters now validate segment and token indices instead of passing them to whisper.cpp, which does not bounds-check (out-of-range indices were undefined behaviour). `full_get_segment_text()` and `full_get_token_text()` return `WhisperError::InvalidParameter`, `full_get_token_data()` returns `None`, and the plain-value getters (`full_get_segment_timestamps()`, `full_get_segment_speaker_turn_next()`, `full_n_tokens()`, `full_get_token_id()`, `full_get_token_prob()`) panic, like slice indexing.
+- Improved Silero VAD accuracy in `WhisperStreamPcm`. Each 200 ms probe was evaluated from a freshly reset model with a zero-padded partial window, so speech onsets and short words were often misclassified: on `jfk.wav`, 16 of 55 probe decisions differed from a full-file Silero pass, cutting "Ask not" short (transcribed as "Ask, knock!") and splitting a sentence. The model state is now carried across probes (reset only when the stream starts) and only whole 32 ms windows are evaluated, which matches the full-file pass.
 - Fixed the `whisper-cpp-plus-sys` documentation on docs.rs, which was generated from out-of-date hand-written stubs: it was missing functions, listed functions that no longer exist, and showed some wrong signatures and types. It now matches the real bindings.
+
+### Documentation
+
+- Clarified that `WhisperVadProcessor::detect_speech()` returns whether the computation succeeded, not whether speech was found; speech probabilities come from `get_probs()`.
+- Documented that `PcmReaderConfig::buffer_len_ms` drops the oldest samples on overflow, so sources faster than real time (files, in-memory buffers) need a buffer that holds the whole input.
 
 ## [0.1.5] - 2026-06-12
 

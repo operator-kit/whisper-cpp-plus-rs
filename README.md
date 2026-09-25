@@ -207,7 +207,7 @@ Notes:
 
 - `PcmReader` does not decode WAV/MP3, resample audio, or convert stereo to mono. Your `Read` source must already be normalized to the format described by `PcmReaderConfig`.
 - `WhisperStreamPcm::new(...)` uses fixed-step mode or simple built-in VAD depending on `use_vad`.
-- `WhisperStreamPcm::with_vad(...)` uses an explicit `WhisperVadProcessor` (Silero VAD) and is the recommended path when you want Silero-based segmentation.
+- `WhisperStreamPcm::with_vad(...)` uses an explicit `WhisperVadProcessor` (Silero VAD) and is the recommended path when you want Silero-based segmentation. Silero's state is carried across probes for the whole stream (it is reset when the stream is created), so each probe is judged in context.
 - In VAD mode, `no_context` is forced internally to match `stream-pcm.cpp`.
 - In VAD mode, `run()` emits the next completed speech chunk in chronological order, and callers can usually append those segments directly.
 - In fixed-step mode, callbacks are produced from overlapping windows, so callers that build a cumulative transcript may need to reconcile repeated text across callbacks.

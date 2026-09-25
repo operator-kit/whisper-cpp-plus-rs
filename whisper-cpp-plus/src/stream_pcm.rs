@@ -49,6 +49,11 @@ pub enum PcmFormat {
 #[derive(Debug, Clone)]
 pub struct PcmReaderConfig {
     /// Ring buffer length in milliseconds (maps to `m_len_ms`).
+    ///
+    /// When the buffer is full, the oldest unread samples are dropped (see
+    /// [`PcmReader::dropped_samples`]). That suits live input, but a source that produces audio
+    /// faster than real time, such as a file or in-memory buffer, can overflow it and lose audio.
+    /// Size the buffer to hold the whole input in that case.
     pub buffer_len_ms: i32,
     /// Sample rate (must be 16000).
     pub sample_rate: i32,
@@ -376,6 +381,10 @@ pub struct WhisperStreamPcmConfig {
     /// If true, don't carry prompt tokens across inference boundaries.
     pub no_context: bool,
     /// VAD probe chunk size in ms.
+    ///
+    /// With Silero VAD, audio is evaluated in whole 32 ms windows
+    /// ([`WhisperVadProcessor::WINDOW_SAMPLES`]); leftover samples carry into the next probe,
+    /// and a probe that doesn't complete a window keeps the previous speech/silence decision.
     pub vad_probe_ms: i32,
     /// Silence duration to end a segment in ms.
     pub vad_silence_ms: i32,
@@ -435,6 +444,11 @@ pub struct WhisperStreamPcm {
     total_samples: i64,
     n_iter: i32,
 
+    // Silero streaming state: samples not yet fed to the VAD (less than one window) and the
+    // last speech/silence decision, reused when a probe doesn't complete a window.
+    vad_carry: Vec<f32>,
+    vad_last_silence: bool,
+
     // VAD pre-computed
     vad_last_ms: i32,
     vad_pre_roll_samples: usize,
@@ -469,9 +483,14 @@ impl WhisperStreamPcm {
         params: FullParams,
         config: &mut WhisperStreamPcmConfig,
         reader: PcmReader,
-        vad: Option<WhisperVadProcessor>,
+        mut vad: Option<WhisperVadProcessor>,
     ) -> Result<Self> {
         let state = WhisperState::new(ctx)?;
+
+        // The processor may have been used before; start this stream from a clean VAD state.
+        if let Some(vad) = vad.as_mut() {
+            vad.reset_state();
+        }
 
         // Normalize config (matches C++ main)
         if !config.use_vad {
@@ -530,6 +549,8 @@ impl WhisperStreamPcm {
             silence_samples: 0,
             total_samples: 0,
             n_iter: 0,
+            vad_carry: Vec::new(),
+            vad_last_silence: true,
             vad_last_ms,
             vad_pre_roll_samples,
             vad_silence_samples,
@@ -678,17 +699,28 @@ impl WhisperStreamPcm {
 
         // Determine silence via Silero or simple VAD
         let silence = if let Some(ref mut vad) = self.vad {
-            if vad.detect_speech(&pcmf32_new) {
-                let probs = vad.get_probs();
-                let avg = if probs.is_empty() {
-                    0.0
+            // Silero is recurrent: carry its state across probes (reset only at stream start)
+            // so each probe is judged in context, and feed only whole windows so zero-padding
+            // never enters the carried state. Resetting per probe, or between utterances,
+            // would restart the model cold and misclassify speech onsets.
+            self.vad_carry.extend_from_slice(&pcmf32_new);
+            let window = WhisperVadProcessor::WINDOW_SAMPLES;
+            let whole = self.vad_carry.len() / window * window;
+            if whole > 0 {
+                self.vad_last_silence = if vad.detect_speech_no_reset(&self.vad_carry[..whole]) {
+                    let probs = vad.get_probs();
+                    let avg = if probs.is_empty() {
+                        0.0
+                    } else {
+                        probs.iter().sum::<f32>() / probs.len() as f32
+                    };
+                    avg < self.config.vad_thold
                 } else {
-                    probs.iter().sum::<f32>() / probs.len() as f32
+                    true // detect failed → treat as silence
                 };
-                avg < self.config.vad_thold
-            } else {
-                true // detect failed → treat as silence
+                self.vad_carry.drain(..whole);
             }
+            self.vad_last_silence
         } else {
             vad_simple(
                 &pcmf32_new,

@@ -46,8 +46,23 @@ fn wav_to_raw_pcm(path: &Path, format: PcmFormat) -> (Vec<u8>, usize) {
     (bytes, n_samples)
 }
 
+/// Reader buffer length that holds the whole clip, plus a margin.
+///
+/// These tests feed an in-memory file far faster than real time. With a buffer shorter than the
+/// clip, `PcmReader` overflows and (correctly, for live input) drops the oldest samples, which
+/// silently cut the first second of jfk.wav.
+fn buffer_len_ms_for(n_samples: usize) -> i32 {
+    (n_samples * 1000 / 16000) as i32 + 1000
+}
+
 fn check_jfk_keywords(text: &str) {
     let lower = text.to_lowercase();
+    // The opening words go missing if the start of the clip is dropped.
+    assert!(
+        lower.contains("and so"),
+        "Transcript is missing the opening \"And so\": {}",
+        text
+    );
     let keywords = ["ask", "not", "what", "country", "you"];
     let found: Vec<&&str> = keywords.iter().filter(|k| lower.contains(**k)).collect();
     println!("Transcript: {}", text);
@@ -78,7 +93,7 @@ fn test_stream_pcm_fixed_step_f32() {
         return;
     };
 
-    let (raw_bytes, _) = wav_to_raw_pcm(&jfk_path, PcmFormat::F32);
+    let (raw_bytes, n_samples) = wav_to_raw_pcm(&jfk_path, PcmFormat::F32);
 
     let ctx = WhisperContext::new(&model_path).unwrap();
     let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
@@ -89,7 +104,7 @@ fn test_stream_pcm_fixed_step_f32() {
     let reader = PcmReader::new(
         Box::new(std::io::Cursor::new(raw_bytes)),
         PcmReaderConfig {
-            buffer_len_ms: 10000,
+            buffer_len_ms: buffer_len_ms_for(n_samples),
             sample_rate: 16000,
             format: PcmFormat::F32,
         },
@@ -134,7 +149,7 @@ fn test_stream_pcm_fixed_step_s16() {
         return;
     };
 
-    let (raw_bytes, _) = wav_to_raw_pcm(&jfk_path, PcmFormat::S16);
+    let (raw_bytes, n_samples) = wav_to_raw_pcm(&jfk_path, PcmFormat::S16);
 
     let ctx = WhisperContext::new(&model_path).unwrap();
     let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
@@ -145,7 +160,7 @@ fn test_stream_pcm_fixed_step_s16() {
     let reader = PcmReader::new(
         Box::new(std::io::Cursor::new(raw_bytes)),
         PcmReaderConfig {
-            buffer_len_ms: 10000,
+            buffer_len_ms: buffer_len_ms_for(n_samples),
             sample_rate: 16000,
             format: PcmFormat::S16,
         },
@@ -190,7 +205,7 @@ fn test_stream_pcm_vad_simple() {
         return;
     };
 
-    let (raw_bytes, _) = wav_to_raw_pcm(&jfk_path, PcmFormat::F32);
+    let (raw_bytes, n_samples) = wav_to_raw_pcm(&jfk_path, PcmFormat::F32);
 
     let ctx = WhisperContext::new(&model_path).unwrap();
     let params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 }).language("en");
@@ -198,7 +213,7 @@ fn test_stream_pcm_vad_simple() {
     let reader = PcmReader::new(
         Box::new(std::io::Cursor::new(raw_bytes)),
         PcmReaderConfig {
-            buffer_len_ms: 10000,
+            buffer_len_ms: buffer_len_ms_for(n_samples),
             sample_rate: 16000,
             format: PcmFormat::F32,
         },
@@ -256,7 +271,7 @@ fn test_stream_pcm_vad_silero() {
         return;
     };
 
-    let (raw_bytes, _) = wav_to_raw_pcm(&jfk_path, PcmFormat::F32);
+    let (raw_bytes, n_samples) = wav_to_raw_pcm(&jfk_path, PcmFormat::F32);
 
     let ctx = WhisperContext::new(&model_path).unwrap();
     let vad = whisper_cpp_plus::WhisperVadProcessor::new(&vad_model_path).unwrap();
@@ -265,7 +280,7 @@ fn test_stream_pcm_vad_silero() {
     let reader = PcmReader::new(
         Box::new(std::io::Cursor::new(raw_bytes)),
         PcmReaderConfig {
-            buffer_len_ms: 10000,
+            buffer_len_ms: buffer_len_ms_for(n_samples),
             sample_rate: 16000,
             format: PcmFormat::F32,
         },
@@ -288,14 +303,13 @@ fn test_stream_pcm_vad_silero() {
     stream
         .run(|segments, start_ms, end_ms| {
             segment_count += 1;
+            let text: String = segments.iter().map(|seg| seg.text.as_str()).collect();
             println!(
-                "Silero VAD segment {}: {}ms-{}ms",
-                segment_count, start_ms, end_ms
+                "Silero VAD segment {}: {}ms-{}ms:{}",
+                segment_count, start_ms, end_ms, text
             );
-            for seg in segments {
-                all_text.push_str(&seg.text);
-                all_text.push(' ');
-            }
+            all_text.push_str(&text);
+            all_text.push(' ');
         })
         .expect("WhisperStreamPcm::run with Silero VAD failed");
 

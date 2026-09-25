@@ -107,6 +107,13 @@ impl Drop for WhisperVadProcessor {
 }
 
 impl WhisperVadProcessor {
+    /// Number of samples Silero VAD evaluates per probability (512 samples = 32 ms at 16 kHz).
+    ///
+    /// whisper.cpp splits audio into windows of this size and zero-pads a trailing partial
+    /// window. When streaming with [`detect_speech_no_reset`](Self::detect_speech_no_reset),
+    /// feed whole windows so padding doesn't leak into the carried state.
+    pub const WINDOW_SAMPLES: usize = 512;
+
     /// Create a new VAD processor from a model file
     pub fn new<P: AsRef<Path>>(model_path: P) -> Result<Self> {
         Self::new_with_params(model_path, VadContextParams::default())
@@ -137,13 +144,44 @@ impl WhisperVadProcessor {
         Ok(Self { ctx })
     }
 
-    /// Detect speech in audio samples
+    /// Computes speech probabilities for `samples`, starting from a fresh model state.
+    ///
+    /// Returns `true` if the computation succeeded; it does not indicate whether speech was
+    /// found. Read the per-window probabilities with [`get_probs`](Self::get_probs).
+    ///
+    /// The model's recurrent state is reset first, so each call is evaluated independently.
+    /// For a continuous stream, use [`detect_speech_no_reset`](Self::detect_speech_no_reset).
     pub fn detect_speech(&mut self, samples: &[f32]) -> bool {
         if samples.is_empty() {
             return false;
         }
 
         unsafe { ffi::whisper_vad_detect_speech(self.ctx, samples.as_ptr(), samples.len() as i32) }
+    }
+
+    /// Like [`detect_speech`](Self::detect_speech), but keeps the model's recurrent state from
+    /// previous calls, so consecutive chunks of a stream are evaluated in context.
+    ///
+    /// Feed multiples of [`WINDOW_SAMPLES`](Self::WINDOW_SAMPLES) and carry any remainder into
+    /// the next call; a partial window is zero-padded and that padding becomes part of the
+    /// state. Call [`reset_state`](Self::reset_state) between independent streams or utterances.
+    pub fn detect_speech_no_reset(&mut self, samples: &[f32]) -> bool {
+        if samples.is_empty() {
+            return false;
+        }
+
+        unsafe {
+            ffi::whisper_vad_detect_speech_no_reset(
+                self.ctx,
+                samples.as_ptr(),
+                samples.len() as i32,
+            )
+        }
+    }
+
+    /// Resets the model's recurrent state, as at the start of a new stream.
+    pub fn reset_state(&mut self) {
+        unsafe { ffi::whisper_vad_reset_state(self.ctx) }
     }
 
     /// Get the number of probability values
