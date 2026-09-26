@@ -4,6 +4,7 @@
 //! in audio before transcription, improving performance and accuracy.
 
 use crate::error::{Result, WhisperError};
+use crate::state::sample_count;
 use std::path::Path;
 use whisper_cpp_plus_sys as ffi;
 
@@ -138,12 +139,14 @@ impl WhisperVadProcessor {
     }
 
     /// Detect speech in audio samples
+    ///
+    /// Returns `false` without calling whisper.cpp for empty input or more than `i32::MAX` samples.
     pub fn detect_speech(&mut self, samples: &[f32]) -> bool {
-        if samples.is_empty() {
+        let Ok(n_samples) = sample_count(samples) else {
             return false;
-        }
+        };
 
-        unsafe { ffi::whisper_vad_detect_speech(self.ctx, samples.as_ptr(), samples.len() as i32) }
+        unsafe { ffi::whisper_vad_detect_speech(self.ctx, samples.as_ptr(), n_samples) }
     }
 
     /// Get the number of probability values
@@ -185,16 +188,14 @@ impl WhisperVadProcessor {
         samples: &[f32],
         params: &VadParams,
     ) -> Result<VadSegments> {
-        if samples.is_empty() {
-            return Err(WhisperError::InvalidAudioFormat);
-        }
+        let n_samples = sample_count(samples)?;
 
         let segments_ptr = unsafe {
             ffi::whisper_vad_segments_from_samples(
                 self.ctx,
                 params.to_ffi(),
                 samples.as_ptr(),
-                samples.len() as i32,
+                n_samples,
             )
         };
 

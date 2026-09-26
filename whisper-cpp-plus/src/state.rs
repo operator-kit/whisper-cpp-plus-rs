@@ -4,6 +4,20 @@ use crate::params::FullParams;
 use std::sync::Arc;
 use whisper_cpp_plus_sys as ffi;
 
+/// Returns the sample count whisper.cpp takes as an `int`, rejecting empty or oversized audio.
+pub(crate) fn sample_count(audio: &[f32]) -> Result<i32> {
+    if audio.is_empty() {
+        return Err(WhisperError::InvalidAudioFormat);
+    }
+    i32::try_from(audio.len()).map_err(|_| {
+        WhisperError::InvalidParameter(format!(
+            "audio has {} samples; whisper.cpp accepts at most {}",
+            audio.len(),
+            i32::MAX
+        ))
+    })
+}
+
 pub struct WhisperState {
     pub(crate) ptr: *mut ffi::whisper_state,
     pub(crate) _context: Arc<ContextPtr>,
@@ -34,9 +48,8 @@ impl WhisperState {
     }
 
     pub fn full(&mut self, params: FullParams, audio: &[f32]) -> Result<()> {
-        if audio.is_empty() {
-            return Err(WhisperError::InvalidAudioFormat);
-        }
+        let n_samples = sample_count(audio)?;
+        params.validate()?;
 
         let ret = unsafe {
             ffi::whisper_full_with_state(
@@ -44,7 +57,7 @@ impl WhisperState {
                 self.ptr,
                 params.as_raw(),
                 audio.as_ptr(),
-                audio.len() as i32,
+                n_samples,
             )
         };
 
@@ -64,13 +77,22 @@ impl WhisperState {
         audio: &[f32],
         n_processors: i32,
     ) -> Result<()> {
-        if audio.is_empty() {
-            return Err(WhisperError::InvalidAudioFormat);
-        }
+        let n_samples = sample_count(audio)?;
+        params.validate()?;
 
         if n_processors < 1 {
             return Err(WhisperError::InvalidParameter(
                 "n_processors must be at least 1".into(),
+            ));
+        }
+
+        // whisper_full_parallel splits the audio after the offset without checking it; an offset at
+        // or past the end gives negative per-chunk sample counts.
+        let offset_samples =
+            i64::from(params.inner.offset_ms) * i64::from(ffi::WHISPER_SAMPLE_RATE) / 1000;
+        if offset_samples >= i64::from(n_samples) {
+            return Err(WhisperError::InvalidParameter(
+                "offset_ms must be within the audio".into(),
             ));
         }
 
@@ -79,7 +101,7 @@ impl WhisperState {
                 self._context.0,
                 params.as_raw(),
                 audio.as_ptr(),
-                audio.len() as i32,
+                n_samples,
                 n_processors,
             )
         };
