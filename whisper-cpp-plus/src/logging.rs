@@ -1,16 +1,20 @@
 //! Control over whisper.cpp's log output.
 //!
 //! whisper.cpp (including its VAD and the ggml backends) writes log messages to stderr by
-//! default. [`WhisperLog`] wraps `whisper_log_set` so the output can be redirected to a Rust
-//! callback, silenced, or forwarded to the [`log`](https://docs.rs/log) crate (feature `log`).
+//! default. [`WhisperLog`] redirects that output to a Rust callback, silences it, or forwards it
+//! to the [`log`](https://docs.rs/log) crate (feature `log`).
 //!
-//! The log hook is process-global state in whisper.cpp, so configure it once at startup,
-//! before loading models or starting transcriptions.
+//! whisper.cpp's log hook (`whisper_log_set`) is process-global state that whisper.cpp writes
+//! and reads without synchronisation, so changing it while another thread is inside whisper.cpp
+//! is a data race. The crate therefore installs its own hook exactly once, before its first call
+//! into whisper.cpp, and never changes it again. [`WhisperLog`] only changes where that hook
+//! sends messages, which is synchronised on the Rust side.
 
 use std::ffi::{c_char, c_void, CStr};
+use std::io::Write;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Once, RwLock};
 use whisper_cpp_plus_sys as ffi;
 
 /// Severity of a whisper.cpp log message (`ggml_log_level`).
@@ -24,52 +28,57 @@ pub enum LogLevel {
 
 type LogCallback = Arc<dyn Fn(LogLevel, &str) + Send + Sync>;
 
-// The active Rust callback. whisper.cpp only ever holds a pointer to `log_trampoline`, which
-// looks the callback up here, so no Rust data is ever handed to C.
-static CALLBACK: RwLock<Option<LogCallback>> = RwLock::new(None);
+// Where `log_trampoline` sends messages.
+enum Sink {
+    // What whisper.cpp does when no log callback has been set: every message goes to stderr.
+    Stderr,
+    Discard,
+    Callback(LogCallback),
+}
 
-// Whether `log_trampoline` is installed in whisper.cpp. The lock also serialises our calls to
-// `whisper_log_set`, which writes whisper.cpp's global state without synchronisation.
-static INSTALLED: Mutex<bool> = Mutex::new(false);
+// whisper.cpp only ever holds a pointer to `log_trampoline`, which looks the sink up here, so no
+// Rust data is ever handed to C.
+static SINK: RwLock<Sink> = RwLock::new(Sink::Stderr);
+
+static INSTALL: Once = Once::new();
 
 // Level of the last message, used for `GGML_LOG_LEVEL_CONT` ("continue previous message").
 static LAST_LEVEL: AtomicU8 = AtomicU8::new(LogLevel::Info as u8);
 
-/// Configures where whisper.cpp's log output goes (`whisper_log_set`).
+/// Configures where whisper.cpp's log output goes.
 ///
 /// This covers whisper.cpp, its VAD, and the ggml backends it initialises. Output goes to
-/// stderr until one of these functions is called.
+/// stderr until one of these functions is called. They are safe to call at any time, including
+/// while other threads are transcribing.
+///
+/// The crate installs its own hook with `whisper_log_set` before its first call into
+/// whisper.cpp; a hook set earlier by calling `whisper_log_set` directly through
+/// `whisper-cpp-plus-sys` is replaced at that point.
 pub struct WhisperLog;
 
 impl WhisperLog {
     /// Sends whisper.cpp log messages to `callback` instead of stderr.
     ///
-    /// Messages are passed without their trailing newline; empty messages are skipped. Debug
-    /// messages are included (whisper.cpp's default stderr output hides them). The callback may
-    /// be called from any thread, including whisper.cpp's worker threads. A panic inside the
-    /// callback is caught and the message dropped, since unwinding into C is not allowed.
-    ///
-    /// Replacing the callback later is cheap and safe at any time.
+    /// Messages are passed without their trailing newline; empty messages are skipped. The
+    /// callback may be called from any thread, including whisper.cpp's worker threads. A panic
+    /// inside the callback is caught and the message dropped, since unwinding into C is not
+    /// allowed.
     pub fn set<F>(callback: F)
     where
         F: Fn(LogLevel, &str) + Send + Sync + 'static,
     {
-        *write_callback() = Some(Arc::new(callback));
-        install_trampoline();
+        set_sink(Sink::Callback(Arc::new(callback)));
     }
 
     /// Discards all whisper.cpp log output.
     pub fn disable() {
-        *write_callback() = None;
-        install_trampoline();
+        set_sink(Sink::Discard);
     }
 
-    /// Restores whisper.cpp's default behaviour: messages above debug level go to stderr.
+    /// Restores the default: every message goes to stderr unchanged, as it does when no log
+    /// callback has been set in whisper.cpp.
     pub fn reset() {
-        let mut installed = lock_installed();
-        unsafe { ffi::whisper_log_set(None, std::ptr::null_mut()) };
-        *installed = false;
-        *write_callback() = None;
+        set_sink(Sink::Stderr);
     }
 
     /// Forwards whisper.cpp log messages to the [`log`](https://docs.rs/log) crate with target
@@ -88,24 +97,22 @@ impl WhisperLog {
     }
 }
 
-fn write_callback() -> std::sync::RwLockWriteGuard<'static, Option<LogCallback>> {
-    CALLBACK
+/// Installs the crate's log hook in whisper.cpp, once per process.
+///
+/// Every safe entry point that can call into whisper.cpp without going through an existing
+/// context or VAD context (constructors, quantization) must call this first. `Once` orders the
+/// `whisper_log_set` write before every later crate call into whisper.cpp, so the hook is never
+/// written while the crate is inside whisper.cpp.
+pub(crate) fn ensure_installed() {
+    INSTALL
+        .call_once(|| unsafe { ffi::whisper_log_set(Some(log_trampoline), std::ptr::null_mut()) });
+}
+
+fn set_sink(sink: Sink) {
+    ensure_installed();
+    *SINK
         .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-fn lock_installed() -> std::sync::MutexGuard<'static, bool> {
-    INSTALLED
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-fn install_trampoline() {
-    let mut installed = lock_installed();
-    if !*installed {
-        unsafe { ffi::whisper_log_set(Some(log_trampoline), std::ptr::null_mut()) };
-        *installed = true;
-    }
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = sink;
 }
 
 fn map_level(level: ffi::ggml_log_level) -> Option<LogLevel> {
@@ -141,14 +148,17 @@ unsafe extern "C" fn log_trampoline(
         if text.is_null() {
             return;
         }
-        let Some(level) = map_level(level) else {
-            return;
+        let callback = match &*SINK.read().unwrap_or_else(|poisoned| poisoned.into_inner()) {
+            Sink::Stderr => {
+                let mut stderr = std::io::stderr().lock();
+                let _ = stderr.write_all(CStr::from_ptr(text).to_bytes());
+                let _ = stderr.flush();
+                return;
+            }
+            Sink::Discard => return,
+            Sink::Callback(callback) => Arc::clone(callback),
         };
-        let callback = CALLBACK
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone();
-        let Some(callback) = callback else {
+        let Some(level) = map_level(level) else {
             return;
         };
 
@@ -164,22 +174,29 @@ unsafe extern "C" fn log_trampoline(
 mod tests {
     use super::*;
     use std::ffi::CString;
+    use std::sync::Mutex;
 
     fn emit(level: ffi::ggml_log_level, text: &str) {
         let text = CString::new(text).unwrap();
         unsafe { log_trampoline(level, text.as_ptr(), std::ptr::null_mut()) };
     }
 
-    // One test so the shared CALLBACK isn't raced by other tests in this module. The
-    // trampoline is called directly and never installed in whisper.cpp, so other tests' log
-    // output doesn't reach the callback.
+    // Sets the sink without installing the trampoline in whisper.cpp, so other tests' log output
+    // doesn't reach it.
+    fn set_sink_for_test(sink: Sink) {
+        *SINK
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = sink;
+    }
+
+    // One test so the shared SINK isn't raced by other tests in this module.
     #[test]
     fn trampoline_maps_levels_trims_and_contains_panics() {
         let received: Arc<Mutex<Vec<(LogLevel, String)>>> = Arc::default();
         let sink = Arc::clone(&received);
-        *write_callback() = Some(Arc::new(move |level, message: &str| {
+        set_sink_for_test(Sink::Callback(Arc::new(move |level, message: &str| {
             sink.lock().unwrap().push((level, message.to_owned()));
-        }));
+        })));
 
         emit(ffi::ggml_log_level_GGML_LOG_LEVEL_DEBUG, "debug line\n");
         emit(ffi::ggml_log_level_GGML_LOG_LEVEL_INFO, "info line\n");
@@ -196,6 +213,20 @@ mod tests {
             )
         };
 
+        // A panicking callback must not unwind into C.
+        set_sink_for_test(Sink::Callback(Arc::new(|_, _: &str| {
+            panic!("callback panicked")
+        })));
+        emit(ffi::ggml_log_level_GGML_LOG_LEVEL_INFO, "boom\n");
+
+        // Discard: messages are dropped.
+        set_sink_for_test(Sink::Discard);
+        emit(ffi::ggml_log_level_GGML_LOG_LEVEL_INFO, "dropped\n");
+
+        // Stderr: written unchanged, nothing reaches the old callback.
+        set_sink_for_test(Sink::Stderr);
+        emit(ffi::ggml_log_level_GGML_LOG_LEVEL_INFO, "stderr line\n");
+
         assert_eq!(
             *received.lock().unwrap(),
             vec![
@@ -206,14 +237,6 @@ mod tests {
                 (LogLevel::Error, "error line".to_owned()),
             ]
         );
-
-        // A panicking callback must not unwind into C.
-        *write_callback() = Some(Arc::new(|_, _: &str| panic!("callback panicked")));
-        emit(ffi::ggml_log_level_GGML_LOG_LEVEL_INFO, "boom\n");
-
-        // No callback: messages are dropped.
-        *write_callback() = None;
-        emit(ffi::ggml_log_level_GGML_LOG_LEVEL_INFO, "dropped\n");
     }
 
     #[test]

@@ -131,6 +131,7 @@ impl WhisperVadProcessor {
 
         let c_path = std::ffi::CString::new(path_str)?;
 
+        crate::logging::ensure_installed();
         let ctx = unsafe {
             ffi::whisper_vad_init_from_file_with_params(c_path.as_ptr(), params.to_ffi())
         };

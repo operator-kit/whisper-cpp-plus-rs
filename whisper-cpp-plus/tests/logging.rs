@@ -60,4 +60,31 @@ fn test_log_routing() {
     WhisperLog::reset();
     drop(WhisperContext::new(&model_path).expect("Failed to load model"));
     assert_eq!(captured.lock().unwrap().len(), before);
+
+    // Changing the routing while another thread is inside whisper.cpp is allowed: it only
+    // touches Rust-side state, never whisper.cpp's global log hook. (A data race here would
+    // need a thread sanitizer to detect; this checks the calls are accepted and routing still
+    // works afterwards.)
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let toggler = {
+        let stop = Arc::clone(&stop);
+        std::thread::spawn(move || {
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                WhisperLog::set(|_, _| {});
+                WhisperLog::disable();
+                WhisperLog::reset();
+            }
+        })
+    };
+    for _ in 0..3 {
+        drop(WhisperContext::new(&model_path).expect("Failed to load model"));
+    }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    toggler.join().expect("toggler thread panicked");
+
+    capture_into(&captured);
+    let before = captured.lock().unwrap().len();
+    drop(WhisperContext::new(&model_path).expect("Failed to load model"));
+    assert!(captured.lock().unwrap().len() > before);
+    WhisperLog::reset();
 }

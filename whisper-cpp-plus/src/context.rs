@@ -33,6 +33,7 @@ impl WhisperContext {
 
         // All transcription runs on explicit `WhisperState`s, so don't allocate whisper.cpp's
         // default state (KV caches and compute buffers) for the context.
+        crate::logging::ensure_installed();
         let ptr = unsafe {
             ffi::whisper_init_from_file_with_params_no_state(
                 c_path.as_ptr(),
@@ -50,6 +51,7 @@ impl WhisperContext {
     }
 
     pub fn new_from_buffer(buffer: &[u8]) -> Result<Self> {
+        crate::logging::ensure_installed();
         let ptr = unsafe {
             ffi::whisper_init_from_buffer_with_params_no_state(
                 buffer.as_ptr() as *mut std::os::raw::c_void,

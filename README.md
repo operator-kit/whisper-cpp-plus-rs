@@ -258,7 +258,7 @@ let result = ctx.transcribe_with_params_enhanced(&audio, params)?;
 
 **Controlling whisper.cpp log output:**
 
-whisper.cpp prints model-loading and processing details to stderr by default. Configure `WhisperLog` once at startup, before loading models:
+whisper.cpp prints model-loading and processing details to stderr by default. `WhisperLog` changes where they go, and can be called at any time (usually once at startup):
 
 ```rust
 use whisper_cpp_plus::{LogLevel, WhisperLog};
