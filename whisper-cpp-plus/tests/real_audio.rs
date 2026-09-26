@@ -241,6 +241,157 @@ fn test_state_getters_reject_out_of_range_indices() {
     }));
 }
 
+/// Loads the model and jfk.wav, or returns `None` (skip) if either is missing.
+fn jfk_fixture() -> Option<(WhisperContext, Vec<f32>)> {
+    let Some(model_path) = find_whisper_model() else {
+        eprintln!(
+            "Skipping: model not found. Set WHISPER_TEST_MODEL_DIR or run `cargo xtask test-setup`"
+        );
+        return None;
+    };
+    let Some(audio_path) = find_jfk_audio() else {
+        eprintln!("Skipping: JFK audio not found. Set WHISPER_TEST_AUDIO_DIR or run `cargo xtask test-setup`");
+        return None;
+    };
+    let audio = load_wav_file(&audio_path).expect("Failed to load JFK audio");
+    let ctx = WhisperContext::new(&model_path).expect("Failed to load model");
+    Some((ctx, audio))
+}
+
+fn greedy_params() -> FullParams {
+    FullParams::new(SamplingStrategy::Greedy { best_of: 1 })
+}
+
+fn assert_segments_ordered(result: &whisper_cpp_plus::TranscriptionResult) {
+    for (i, segment) in result.segments.iter().enumerate() {
+        assert!(
+            segment.start_ms <= segment.end_ms,
+            "segment {i} ends before it starts: {segment:?}"
+        );
+        if i > 0 {
+            let previous = &result.segments[i - 1];
+            assert!(
+                segment.start_ms >= previous.end_ms,
+                "segment {i} overlaps the previous one: {previous:?} then {segment:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn test_full_parallel_merges_chunks_on_original_timeline() {
+    let Some((ctx, audio)) = jfk_fixture() else {
+        return;
+    };
+    let audio_ms = audio.len() as i64 * 1000 / 16000;
+    let split_ms = audio_ms / 2;
+
+    let result = ctx
+        .full_parallel(greedy_params(), &audio, 2)
+        .expect("full_parallel failed");
+    println!("full_parallel(2): {:?}", result.segments);
+
+    assert!(!result.segments.is_empty());
+    assert_segments_ordered(&result);
+
+    // The second chunk's segments must be shifted past the split point.
+    assert!(
+        result.segments.iter().any(|s| s.start_ms >= split_ms),
+        "no segment starts after the {split_ms} ms split: {:?}",
+        result.segments
+    );
+    let last = result.segments.last().unwrap();
+    assert!(
+        last.end_ms > audio_ms * 3 / 4 && last.end_ms <= audio_ms,
+        "last segment ends at {} ms, expected close to (and not past) {audio_ms} ms",
+        last.end_ms
+    );
+    // Segments from the first chunk are clamped to it, so they can't overrun the split.
+    for segment in result.segments.iter().filter(|s| s.start_ms < split_ms) {
+        assert!(
+            segment.end_ms <= split_ms,
+            "first-chunk segment overruns the {split_ms} ms split: {segment:?}"
+        );
+    }
+
+    let text = result.text.to_lowercase();
+    assert!(
+        text.contains("americans"),
+        "missing first-chunk text: {text}"
+    );
+    assert!(
+        text.contains("your country"),
+        "missing second-chunk text: {text}"
+    );
+}
+
+#[test]
+fn test_full_parallel_respects_offset() {
+    let Some((ctx, audio)) = jfk_fixture() else {
+        return;
+    };
+    let audio_ms = audio.len() as i64 * 1000 / 16000;
+    let offset_ms = 2000;
+    // Chunks split the audio after the offset: the second starts halfway through the rest.
+    let split_ms = offset_ms + (audio_ms - offset_ms) / 2;
+
+    let result = ctx
+        .full_parallel(greedy_params().offset_ms(offset_ms as i32), &audio, 2)
+        .expect("full_parallel failed");
+    println!(
+        "full_parallel(2, offset {offset_ms} ms): {:?}",
+        result.segments
+    );
+
+    assert!(!result.segments.is_empty());
+    assert_segments_ordered(&result);
+    assert!(
+        result.segments[0].start_ms >= offset_ms - 100,
+        "first segment starts before the offset: {:?}",
+        result.segments[0]
+    );
+    assert!(
+        result.segments.iter().any(|s| s.start_ms >= split_ms),
+        "no segment starts after the {split_ms} ms split: {:?}",
+        result.segments
+    );
+}
+
+#[test]
+fn test_full_parallel_single_chunk_matches_full() {
+    let Some((ctx, audio)) = jfk_fixture() else {
+        return;
+    };
+
+    let single = ctx
+        .transcribe_with_full_params(&audio, greedy_params())
+        .expect("transcription failed");
+    let parallel = ctx
+        .full_parallel(greedy_params(), &audio, 1)
+        .expect("full_parallel failed");
+    assert_eq!(parallel.text, single.text);
+    assert_eq!(parallel.segments.len(), single.segments.len());
+
+    // Audio too short to split into chunks falls back to a single transcription.
+    let short = &audio[..3];
+    let fallback = ctx
+        .full_parallel(greedy_params(), short, 4)
+        .expect("full_parallel on short audio failed");
+    let expected = ctx
+        .transcribe_with_full_params(short, greedy_params())
+        .expect("transcription failed");
+    assert_eq!(fallback.text, expected.text);
+}
+
+#[test]
+fn test_full_parallel_rejects_invalid_input() {
+    let Some((ctx, audio)) = jfk_fixture() else {
+        return;
+    };
+    assert!(ctx.full_parallel(greedy_params(), &audio, 0).is_err());
+    assert!(ctx.full_parallel(greedy_params(), &[], 2).is_err());
+}
+
 #[test]
 fn test_audio_duration_handling() {
     let Some(model_path) = find_whisper_model() else {

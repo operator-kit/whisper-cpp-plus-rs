@@ -1,6 +1,6 @@
 # whisper-cpp-plus
 
-> **Pinned to whisper.cpp 1.9.4-dev** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`de8fb5fd`](https://github.com/rmorse/whisper.cpp/commit/de8fb5fda8b25837a2ba0034c8c24223a6fd6c6c), based on upstream `ggml-org/whisper.cpp` `master` after `v1.9.3`)
+> **Pinned to whisper.cpp post-v1.9.4** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`de8fb5fd`](https://github.com/rmorse/whisper.cpp/commit/de8fb5fda8b25837a2ba0034c8c24223a6fd6c6c), based on upstream `ggml-org/whisper.cpp` `master` after the `v1.9.4` release)
 
 Safe Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with real-time PCM streaming and VAD support — OpenAI's Whisper speech recognition model.
 
@@ -35,6 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **Async** — `tokio::spawn_blocking` wrappers (feature = `async`)
 - **Cross-platform** — Windows (MSVC), Linux, macOS (Intel & Apple Silicon)
 - **Quantization** — model compression via `WhisperQuantize` (feature = `quantization`)
+- **Logging control** — redirect, silence, or forward whisper.cpp's log output via `WhisperLog` (`log` crate integration with feature = `log`)
 - **Hardware acceleration** — SIMD auto-detected, GPU via feature flags
 
 ## Installation
@@ -60,6 +61,7 @@ whisper-cpp-plus = { version = "0.1.5", features = ["quantization"] }  # Model q
 whisper-cpp-plus = { version = "0.1.5", features = ["async"] }         # Async API
 whisper-cpp-plus = { version = "0.1.5", features = ["cuda"] }          # NVIDIA GPU
 whisper-cpp-plus = { version = "0.1.5", features = ["metal"] }         # macOS GPU
+whisper-cpp-plus = { version = "0.1.5", features = ["log"] }           # Forward logs to the `log` crate
 ```
 
 ### CUDA GPU Acceleration
@@ -205,7 +207,7 @@ Notes:
 
 - `PcmReader` does not decode WAV/MP3, resample audio, or convert stereo to mono. Your `Read` source must already be normalized to the format described by `PcmReaderConfig`.
 - `WhisperStreamPcm::new(...)` uses fixed-step mode or simple built-in VAD depending on `use_vad`.
-- `WhisperStreamPcm::with_vad(...)` uses an explicit `WhisperVadProcessor` (Silero VAD) and is the recommended path when you want Silero-based segmentation.
+- `WhisperStreamPcm::with_vad(...)` uses an explicit `WhisperVadProcessor` (Silero VAD) and is the recommended path when you want Silero-based segmentation. Silero's state is carried across probes for the whole stream (it is reset when the stream is created), so each probe is judged in context.
 - In VAD mode, `no_context` is forced internally to match `stream-pcm.cpp`.
 - In VAD mode, `run()` emits the next completed speech chunk in chronological order, and callers can usually append those segments directly.
 - In fixed-step mode, callbacks are produced from overlapping windows, so callers that build a cumulative transcript may need to reconcile repeated text across callbacks.
@@ -252,6 +254,30 @@ let params = TranscriptionParams::builder()
     .build();
 let result = ctx.transcribe_with_params_enhanced(&audio, params)?;
 // Automatically retries with higher temperatures if quality thresholds aren't met
+```
+
+**Controlling whisper.cpp log output:**
+
+whisper.cpp prints model-loading and processing details to stderr by default. `WhisperLog` changes where they go, and can be called at any time (usually once at startup):
+
+```rust
+use whisper_cpp_plus::{LogLevel, WhisperLog};
+
+// Silence whisper.cpp entirely
+WhisperLog::disable();
+
+// ...or route messages to your own handler
+WhisperLog::set(|level, message| {
+    if level >= LogLevel::Warn {
+        eprintln!("[whisper.cpp {:?}] {}", level, message);
+    }
+});
+
+// ...or, with feature = "log", forward to the `log` crate (target "whisper_cpp")
+// WhisperLog::use_log_crate();
+
+// Restore the default stderr output
+WhisperLog::reset();
 ```
 
 More examples in [`whisper-cpp-plus/examples/`](./whisper-cpp-plus/examples/).

@@ -263,6 +263,7 @@ impl WhisperQuantize {
         }
 
         // Perform quantization
+        crate::logging::ensure_installed();
         let result = unsafe {
             ffi::whisper_model_quantize(
                 input_cstr.as_ptr(),
@@ -330,6 +331,7 @@ impl WhisperQuantize {
 
         let path_cstr = path_to_cstring(path)?;
 
+        crate::logging::ensure_installed();
         let ftype = unsafe { ffi::whisper_model_get_ftype(path_cstr.as_ptr()) };
 
         if ftype < 0 {

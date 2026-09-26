@@ -58,40 +58,20 @@ impl WhisperState {
         Ok(())
     }
 
-    pub fn full_parallel(
-        &mut self,
-        params: FullParams,
-        audio: &[f32],
-        n_processors: i32,
-    ) -> Result<()> {
-        if audio.is_empty() {
-            return Err(WhisperError::InvalidAudioFormat);
-        }
-
-        if n_processors < 1 {
-            return Err(WhisperError::InvalidParameter(
-                "n_processors must be at least 1".into(),
-            ));
-        }
-
-        let ret = unsafe {
-            ffi::whisper_full_parallel(
-                self._context.0,
-                params.as_raw(),
-                audio.as_ptr(),
-                audio.len() as i32,
-                n_processors,
-            )
-        };
-
-        if ret != 0 {
-            return Err(WhisperError::TranscriptionError(format!(
-                "whisper_full_parallel returned {}",
-                ret
-            )));
-        }
-
-        Ok(())
+    /// Collects the segments of the last transcription on this state.
+    pub(crate) fn collect_segments(&self) -> Result<Vec<Segment>> {
+        (0..self.full_n_segments())
+            .map(|i| {
+                let text = self.full_get_segment_text(i)?;
+                let (start_ms, end_ms) = self.full_get_segment_timestamps(i);
+                Ok(Segment {
+                    start_ms,
+                    end_ms,
+                    text,
+                    speaker_turn_next: self.full_get_segment_speaker_turn_next(i),
+                })
+            })
+            .collect()
     }
 
     pub fn full_n_segments(&self) -> i32 {
@@ -100,6 +80,12 @@ impl WhisperState {
 
     pub fn full_lang_id(&self) -> i32 {
         unsafe { ffi::whisper_full_lang_id_from_state(self.ptr) }
+    }
+
+    /// Returns the length, in mel frames, of the audio from the last transcription on this state
+    /// (`whisper_n_len_from_state`); 0 before any transcription.
+    pub fn n_len(&self) -> i32 {
+        unsafe { ffi::whisper_n_len_from_state(self.ptr) }
     }
 
     // The whisper.cpp result getters index their vectors without bounds checks, so every

@@ -8,7 +8,17 @@ license.workspace = true
 repository.workspace = true
 description = "Low-level FFI bindings for whisper.cpp"
 readme = "README.md"
-exclude = ["whisper.cpp"]
+# Only whisper.cpp's public headers (and its license) are packaged, so docs.rs, which has no
+# network access, can generate exact bindings. Regular builds download the full pinned source.
+include = [
+    "/build.rs",
+    "/cuda_detect.rs",
+    "/src/**",
+    "/README.md",
+    "/whisper.cpp/LICENSE",
+    "/whisper.cpp/include/*.h",
+    "/whisper.cpp/ggml/include/*.h",
+]
 
 [dependencies]
 

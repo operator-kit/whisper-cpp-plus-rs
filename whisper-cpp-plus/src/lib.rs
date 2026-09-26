@@ -49,6 +49,7 @@
 
 mod context;
 mod error;
+mod logging;
 mod params;
 mod state;
 mod stream;
@@ -67,6 +68,7 @@ mod async_api;
 
 pub use context::WhisperContext;
 pub use error::{Result, WhisperError};
+pub use logging::{LogLevel, WhisperLog};
 pub use params::{FullParams, SamplingStrategy, TranscriptionParams, TranscriptionParamsBuilder};
 #[cfg(feature = "quantization")]
 pub use quantize::{QuantizationType, QuantizeError, WhisperQuantize};
@@ -88,6 +90,15 @@ pub use async_api::{AsyncWhisperStream, SharedAsyncStream};
 
 // Re-export the sys crate for advanced users who need lower-level access
 pub use whisper_cpp_plus_sys;
+
+fn result_from_segments(segments: Vec<Segment>) -> TranscriptionResult {
+    let text = segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    TranscriptionResult { text, segments }
+}
 
 impl WhisperContext {
     /// Transcribe audio using default parameters
@@ -158,33 +169,123 @@ impl WhisperContext {
     ) -> Result<TranscriptionResult> {
         let mut state = WhisperState::new(self)?;
         state.full(params, audio)?;
+        Ok(result_from_segments(state.collect_segments()?))
+    }
 
-        let n_segments = state.full_n_segments();
-        let mut segments = Vec::with_capacity(n_segments as usize);
-        let mut full_text = String::new();
-
-        for i in 0..n_segments {
-            let text = state.full_get_segment_text(i)?;
-            let (start_ms, end_ms) = state.full_get_segment_timestamps(i);
-            let speaker_turn_next = state.full_get_segment_speaker_turn_next(i);
-
-            if i > 0 {
-                full_text.push(' ');
-            }
-            full_text.push_str(&text);
-
-            segments.push(Segment {
-                start_ms,
-                end_ms,
-                text,
-                speaker_turn_next,
-            });
+    /// Transcribe audio by splitting it into `n_processors` chunks that are transcribed
+    /// concurrently (`whisper_full_parallel`).
+    ///
+    /// The audio after `params.offset_ms` is split into `n_processors` equal chunks. Each chunk
+    /// is transcribed on its own [`WhisperState`] in a separate thread, and the segments are
+    /// merged in order with their times shifted onto the original timeline (a segment never
+    /// starts before the previous one ends). This follows whisper.cpp's `whisper_full_parallel`.
+    ///
+    /// Chunks are not overlapped, so a word that straddles a chunk boundary may be cut or
+    /// misrecognised. Each chunk uses `params.n_threads` threads, so up to
+    /// `n_processors * n_threads` threads run at once. With `n_processors == 1`, or audio too
+    /// short to split, this is a single transcription.
+    ///
+    /// # Arguments
+    /// * `params` - Full parameter configuration, applied to every chunk
+    /// * `audio` - Audio samples (must be 16kHz mono f32)
+    /// * `n_processors` - Number of chunks to transcribe concurrently (at least 1)
+    pub fn full_parallel(
+        &self,
+        params: FullParams,
+        audio: &[f32],
+        n_processors: usize,
+    ) -> Result<TranscriptionResult> {
+        if audio.is_empty() {
+            return Err(WhisperError::InvalidAudioFormat);
+        }
+        if n_processors == 0 {
+            return Err(WhisperError::InvalidParameter(
+                "n_processors must be at least 1".into(),
+            ));
         }
 
-        Ok(TranscriptionResult {
-            text: full_text,
-            segments,
-        })
+        let sample_rate = whisper_cpp_plus_sys::WHISPER_SAMPLE_RATE as usize;
+        let offset_ms = params.inner.offset_ms.max(0) as usize;
+        let offset_samples = (sample_rate * offset_ms / 1000).min(audio.len());
+        let n_samples_per_processor = (audio.len() - offset_samples) / n_processors;
+
+        if n_processors == 1 || n_samples_per_processor == 0 {
+            return self.transcribe_with_full_params(audio, params);
+        }
+
+        let transcribe_chunk = |params: FullParams, chunk: &[f32]| -> Result<Vec<Segment>> {
+            let mut state = WhisperState::new(self)?;
+            state.full(params, chunk)?;
+            state.collect_segments()
+        };
+
+        // As in whisper.cpp: the first chunk also covers the `offset_ms` lead-in (so whisper
+        // skips it itself and reports times from the start of `audio`); later chunks start
+        // after it and are transcribed without an offset.
+        let chunk_results: Vec<Result<Vec<Segment>>> = std::thread::scope(|scope| {
+            let workers: Vec<_> = (1..n_processors)
+                .map(|i| {
+                    let start = offset_samples + i * n_samples_per_processor;
+                    let end = if i == n_processors - 1 {
+                        audio.len()
+                    } else {
+                        start + n_samples_per_processor
+                    };
+                    let chunk_params = params
+                        .clone()
+                        .offset_ms(0)
+                        .print_progress(false)
+                        .print_realtime(false);
+                    let transcribe_chunk = &transcribe_chunk;
+                    scope.spawn(move || transcribe_chunk(chunk_params, &audio[start..end]))
+                })
+                .collect();
+
+            let first = transcribe_chunk(
+                params.clone().print_realtime(false),
+                &audio[..offset_samples + n_samples_per_processor],
+            );
+
+            std::iter::once(first)
+                .chain(workers.into_iter().map(|worker| {
+                    worker
+                        .join()
+                        .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+                }))
+                .collect()
+        });
+
+        let samples_to_ms = |samples: usize| samples as i64 * 1000 / sample_rate as i64;
+
+        let mut segments: Vec<Segment> = Vec::new();
+        for (i, chunk_segments) in chunk_results.into_iter().enumerate() {
+            let chunk_offset_ms = if i == 0 {
+                0
+            } else {
+                samples_to_ms(offset_samples + i * n_samples_per_processor)
+            };
+            let chunk_end_ms = if i == n_processors - 1 {
+                samples_to_ms(audio.len())
+            } else {
+                samples_to_ms(offset_samples + (i + 1) * n_samples_per_processor)
+            };
+
+            for mut segment in chunk_segments? {
+                // whisper can report segment ends past the audio it was given; clamp to the
+                // chunk so an overrun can't push the next chunk's segments later (whisper.cpp's
+                // own merge doesn't do this).
+                segment.start_ms = (segment.start_ms + chunk_offset_ms).min(chunk_end_ms);
+                segment.end_ms = (segment.end_ms + chunk_offset_ms).min(chunk_end_ms);
+                // Keep segments from overlapping across chunk boundaries.
+                if let Some(previous) = segments.last() {
+                    segment.start_ms = segment.start_ms.max(previous.end_ms);
+                }
+                segment.end_ms = segment.end_ms.max(segment.start_ms);
+                segments.push(segment);
+            }
+        }
+
+        Ok(result_from_segments(segments))
     }
 
     /// Create a new state for manual transcription control

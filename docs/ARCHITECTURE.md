@@ -65,4 +65,4 @@ Zero-copy where possible: `&[f32]` slices passed directly to C++ via `.as_ptr()`
 
 ## Build system
 
-`cmake` crate compiles whisper.cpp sources. whisper.cpp vendored as git submodule at `whisper-cpp-plus-sys/whisper.cpp` (excluded from crates.io package - downloaded on demand for consumers). Prebuilt library caching available via `cargo xtask prebuild`.
+`cmake` crate compiles whisper.cpp sources. whisper.cpp vendored as git submodule at `whisper-cpp-plus-sys/whisper.cpp`. The crates.io package ships only its public headers and license; consumers download the full pinned source on demand, and docs.rs (no network) generates bindings from the packaged headers. Prebuilt library caching available via `cargo xtask prebuild`.

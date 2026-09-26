@@ -1,6 +1,6 @@
 # whisper-cpp-plus
 
-> **Pinned to whisper.cpp 1.9.4-dev** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`de8fb5fd`](https://github.com/rmorse/whisper.cpp/commit/de8fb5fda8b25837a2ba0034c8c24223a6fd6c6c), based on upstream `ggml-org/whisper.cpp` `master` after `v1.9.3`)
+> **Pinned to whisper.cpp post-v1.9.4** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`de8fb5fd`](https://github.com/rmorse/whisper.cpp/commit/de8fb5fda8b25837a2ba0034c8c24223a6fd6c6c), based on upstream `ggml-org/whisper.cpp` `master` after the `v1.9.4` release)
 
 Safe Rust bindings for [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with **real-time PCM streaming** and VAD support.
 
@@ -98,6 +98,7 @@ while let Some(segments) = stream.process_step()? {
 | `metal` | Apple Metal acceleration (macOS) |
 | `openblas` | OpenBLAS acceleration (Linux) |
 | `async` | Async transcription API via tokio |
+| `log` | Forward whisper.cpp log output to the `log` crate (`WhisperLog::use_log_crate`) |
 
 Enable in `Cargo.toml`:
 ```toml
@@ -113,6 +114,7 @@ whisper-cpp-plus = { version = "0.1.5", features = ["cuda"] }
 - **VAD** — `WhisperVadProcessor` for Silero-based voice activity detection. Use this (or `WhisperStreamPcm::with_vad` / the enhanced VAD) rather than whisper.cpp's built-in `whisper_full` VAD, which does not run for the per-state transcription this crate uses ([ggml-org/whisper.cpp#3423](https://github.com/ggml-org/whisper.cpp/pull/3423))
 - **Enhanced** — Temperature fallback + enhanced VAD aggregation for improved quality
 - **Quantization** — `WhisperQuantize` for model compression (feature = `quantization`)
+- **Logging** — `WhisperLog` to redirect, silence, or forward whisper.cpp's log output (`log` crate integration with feature = `log`)
 
 ## Examples
 

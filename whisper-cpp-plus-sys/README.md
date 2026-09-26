@@ -1,6 +1,6 @@
 # whisper-cpp-plus-sys
 
-> **Pinned to whisper.cpp 1.9.4-dev** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`de8fb5fd`](https://github.com/rmorse/whisper.cpp/commit/de8fb5fda8b25837a2ba0034c8c24223a6fd6c6c), based on upstream `ggml-org/whisper.cpp` `master` after `v1.9.3`)
+> **Pinned to whisper.cpp post-v1.9.4** (fork: [`rmorse/whisper.cpp`](https://github.com/rmorse/whisper.cpp), branch: `stream-pcm`, commit [`de8fb5fd`](https://github.com/rmorse/whisper.cpp/commit/de8fb5fda8b25837a2ba0034c8c24223a6fd6c6c), based on upstream `ggml-org/whisper.cpp` `master` after the `v1.9.4` release)
 
 Low-level FFI bindings to [whisper.cpp](https://github.com/ggerganov/whisper.cpp) for Rust.
 
