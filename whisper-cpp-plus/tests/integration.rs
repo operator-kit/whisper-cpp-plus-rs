@@ -222,3 +222,46 @@ fn test_empty_audio_error() {
         _ => panic!("Expected InvalidAudioFormat error"),
     }
 }
+
+#[test]
+fn test_rejects_invalid_offset_and_duration() {
+    let Some(model_path) = TestModels::tiny_en() else {
+        eprintln!("Skipping: model not found. Run `cargo xtask test-setup`");
+        return;
+    };
+
+    let ctx = WhisperContext::new(&model_path).unwrap();
+    let audio = vec![0.0f32; 16000];
+    let params = || FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+    let is_invalid_parameter = |result: whisper_cpp_plus::Result<()>| {
+        matches!(result, Err(WhisperError::InvalidParameter(_)))
+    };
+
+    // A negative offset used to reach an out-of-bounds read in whisper.cpp's encoder.
+    let mut state = ctx.create_state().unwrap();
+    assert!(is_invalid_parameter(
+        state.full(params().offset_ms(-1000), &audio)
+    ));
+    assert!(is_invalid_parameter(
+        state.full(params().duration_ms(-1), &audio)
+    ));
+    assert!(matches!(
+        ctx.transcribe_with_full_params(&audio, params().offset_ms(-1)),
+        Err(WhisperError::InvalidParameter(_))
+    ));
+
+    // full_parallel additionally requires the offset to fall within the audio.
+    assert!(is_invalid_parameter(state.full_parallel(
+        params().offset_ms(-1),
+        &audio,
+        2
+    )));
+    assert!(is_invalid_parameter(state.full_parallel(
+        params().offset_ms(1000),
+        &audio,
+        2
+    )));
+
+    // Valid offsets still work.
+    assert!(state.full(params().offset_ms(100), &audio).is_ok());
+}

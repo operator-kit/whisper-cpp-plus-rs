@@ -4,6 +4,7 @@
 //! in audio before transcription, improving performance and accuracy.
 
 use crate::error::{Result, WhisperError};
+use crate::state::sample_count;
 use std::path::Path;
 use whisper_cpp_plus_sys as ffi;
 
@@ -138,12 +139,14 @@ impl WhisperVadProcessor {
     }
 
     /// Detect speech in audio samples
+    ///
+    /// Returns `false` without calling whisper.cpp for empty input or more than `i32::MAX` samples.
     pub fn detect_speech(&mut self, samples: &[f32]) -> bool {
-        if samples.is_empty() {
+        let Ok(n_samples) = sample_count(samples) else {
             return false;
-        }
+        };
 
-        unsafe { ffi::whisper_vad_detect_speech(self.ctx, samples.as_ptr(), samples.len() as i32) }
+        unsafe { ffi::whisper_vad_detect_speech(self.ctx, samples.as_ptr(), n_samples) }
     }
 
     /// Get the number of probability values
@@ -185,16 +188,14 @@ impl WhisperVadProcessor {
         samples: &[f32],
         params: &VadParams,
     ) -> Result<VadSegments> {
-        if samples.is_empty() {
-            return Err(WhisperError::InvalidAudioFormat);
-        }
+        let n_samples = sample_count(samples)?;
 
         let segments_ptr = unsafe {
             ffi::whisper_vad_segments_from_samples(
                 self.ctx,
                 params.to_ffi(),
                 samples.as_ptr(),
-                samples.len() as i32,
+                n_samples,
             )
         };
 
@@ -227,14 +228,33 @@ impl VadSegments {
         unsafe { ffi::whisper_vad_segments_n_segments(self.ptr) }
     }
 
+    // whisper.cpp indexes the segment vector without a bounds check.
+    fn assert_segment_in_range(&self, i_segment: i32) {
+        assert!(
+            (0..self.n_segments()).contains(&i_segment),
+            "VAD segment index {} out of range",
+            i_segment
+        );
+    }
+
     /// Get segment start time in seconds
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i_segment` is out of range.
     pub fn get_segment_t0(&self, i_segment: i32) -> f32 {
+        self.assert_segment_in_range(i_segment);
         // The FFI returns time in centiseconds, convert to seconds
         unsafe { ffi::whisper_vad_segments_get_segment_t0(self.ptr, i_segment) / 100.0 }
     }
 
     /// Get segment end time in seconds
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i_segment` is out of range.
     pub fn get_segment_t1(&self, i_segment: i32) -> f32 {
+        self.assert_segment_in_range(i_segment);
         // The FFI returns time in centiseconds, convert to seconds
         unsafe { ffi::whisper_vad_segments_get_segment_t1(self.ptr, i_segment) / 100.0 }
     }

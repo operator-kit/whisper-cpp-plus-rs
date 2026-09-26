@@ -1,3 +1,4 @@
+use crate::error::{Result, WhisperError};
 use std::ffi::CString;
 use whisper_cpp_plus_sys as ffi;
 
@@ -59,6 +60,26 @@ impl FullParams {
         params.inner.length_penalty = -1.0;
 
         params
+    }
+
+    /// Rejects parameter values that whisper.cpp uses without checking.
+    ///
+    /// A negative `offset_ms` becomes a negative mel offset in whisper.cpp's encoder, which then
+    /// reads before the start of the mel buffer.
+    pub(crate) fn validate(&self) -> Result<()> {
+        if self.inner.offset_ms < 0 {
+            return Err(WhisperError::InvalidParameter(format!(
+                "offset_ms must not be negative (got {})",
+                self.inner.offset_ms
+            )));
+        }
+        if self.inner.duration_ms < 0 {
+            return Err(WhisperError::InvalidParameter(format!(
+                "duration_ms must not be negative (got {})",
+                self.inner.duration_ms
+            )));
+        }
+        Ok(())
     }
 
     pub(crate) fn as_raw(&self) -> ffi::whisper_full_params {
@@ -385,5 +406,24 @@ mod tests {
         let raw = FullParams::default().prompt_tokens(&[]).as_raw();
         assert!(raw.prompt_tokens.is_null());
         assert_eq!(raw.prompt_n_tokens, 0);
+    }
+
+    #[test]
+    fn validate_rejects_negative_offset_and_duration() {
+        assert!(FullParams::default().validate().is_ok());
+        assert!(FullParams::default()
+            .offset_ms(1000)
+            .duration_ms(500)
+            .validate()
+            .is_ok());
+
+        assert!(matches!(
+            FullParams::default().offset_ms(-1).validate(),
+            Err(WhisperError::InvalidParameter(_))
+        ));
+        assert!(matches!(
+            FullParams::default().duration_ms(-10).validate(),
+            Err(WhisperError::InvalidParameter(_))
+        ));
     }
 }
