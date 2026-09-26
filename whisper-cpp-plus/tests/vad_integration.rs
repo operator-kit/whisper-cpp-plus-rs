@@ -369,6 +369,66 @@ fn test_vad_with_silence() {
 }
 
 #[test]
+fn test_vad_segment_getters_reject_out_of_range_indices() {
+    // whisper.cpp does not bounds-check VAD segment indices; the safe getters must.
+    let vad_model_path = find_vad_model();
+    let jfk_path = find_jfk_audio();
+
+    if vad_model_path.is_none() {
+        eprintln!("Skipping: VAD model not found. Set WHISPER_TEST_MODEL_DIR or run `cargo xtask test-setup`");
+        return;
+    }
+    if jfk_path.is_none() {
+        eprintln!("Skipping: JFK audio not found. Set WHISPER_TEST_AUDIO_DIR or run `cargo xtask test-setup`");
+        return;
+    }
+
+    let mut vad =
+        WhisperVadProcessor::new(vad_model_path.unwrap()).expect("Failed to load VAD model");
+    let audio = load_wav_16khz_mono(&jfk_path.unwrap()).expect("Failed to load JFK audio");
+    let silence = vec![0.0f32; 16000 * 3];
+    let vad_params = VadParams::default();
+
+    let speech = vad
+        .segments_from_samples(&audio, &vad_params)
+        .expect("Failed to detect speech segments");
+    let n = speech.n_segments();
+    assert!(n > 0, "Should detect speech in JFK audio");
+
+    // Valid indices still work.
+    let last = n - 1;
+    assert!(speech.get_segment_t1(last) > speech.get_segment_t0(last));
+
+    let empty = vad
+        .segments_from_samples(&silence, &vad_params)
+        .expect("Failed to process silence");
+    assert_eq!(empty.n_segments(), 0);
+
+    let panics =
+        |f: &dyn Fn() -> f32| std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).is_err();
+    for i in [n, n + 1, -1, i32::MIN, i32::MAX] {
+        assert!(
+            panics(&|| speech.get_segment_t0(i)),
+            "t0({}) should panic",
+            i
+        );
+        assert!(
+            panics(&|| speech.get_segment_t1(i)),
+            "t1({}) should panic",
+            i
+        );
+    }
+    assert!(
+        panics(&|| empty.get_segment_t0(0)),
+        "t0(0) on no segments should panic"
+    );
+    assert!(
+        panics(&|| empty.get_segment_t1(0)),
+        "t1(0) on no segments should panic"
+    );
+}
+
+#[test]
 fn test_vad_with_mixed_audio() {
     // Test VAD with artificially created mixed audio (speech-like noise + silence)
     let vad_model_path = find_vad_model();

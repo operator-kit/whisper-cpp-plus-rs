@@ -228,14 +228,33 @@ impl VadSegments {
         unsafe { ffi::whisper_vad_segments_n_segments(self.ptr) }
     }
 
+    // whisper.cpp indexes the segment vector without a bounds check.
+    fn assert_segment_in_range(&self, i_segment: i32) {
+        assert!(
+            (0..self.n_segments()).contains(&i_segment),
+            "VAD segment index {} out of range",
+            i_segment
+        );
+    }
+
     /// Get segment start time in seconds
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i_segment` is out of range.
     pub fn get_segment_t0(&self, i_segment: i32) -> f32 {
+        self.assert_segment_in_range(i_segment);
         // The FFI returns time in centiseconds, convert to seconds
         unsafe { ffi::whisper_vad_segments_get_segment_t0(self.ptr, i_segment) / 100.0 }
     }
 
     /// Get segment end time in seconds
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i_segment` is out of range.
     pub fn get_segment_t1(&self, i_segment: i32) -> f32 {
+        self.assert_segment_in_range(i_segment);
         // The FFI returns time in centiseconds, convert to seconds
         unsafe { ffi::whisper_vad_segments_get_segment_t1(self.ptr, i_segment) / 100.0 }
     }
